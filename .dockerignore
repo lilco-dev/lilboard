@@ -1,0 +1,8 @@
+node_modules
+.next
+data
+.wrangler
+worker/node_modules
+packages/*/node_modules
+**/*.log
+.git

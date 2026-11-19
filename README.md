@@ -113,6 +113,31 @@ LILBOARD_URL=https://lilboard.<your-subdomain>.workers.dev LILBOARD_TOKEN=token1
 - Next.js app at the root consumes `@lilboard/core` via the node adapter for
   self-hosting; `worker/` consumes it via the DO adapter. Same API, same CLI.
 
+## Docker (self-host)
+
+```sh
+docker compose up -d --build     # serves on :3777, data in the lilboard-data volume
+```
+
+## Managing keys
+
+Keys are bearer tokens stored sha256-hashed in the `actors` table of the
+SQLite database (volume-backed in Docker) — the same table `lib/auth.ts`
+checks per request. Manage them with a command inside the container:
+
+```sh
+docker exec lilboard node bin/keys.mjs add fx               # generates a token, shows it once
+docker exec lilboard node bin/keys.mjs add ada --kind person
+docker exec lilboard node bin/keys.mjs add ci --token my-fixed-token
+docker exec lilboard node bin/keys.mjs list
+docker exec lilboard node bin/keys.mjs remove fx
+```
+
+Hand each agent its token; it sends `Authorization: Bearer <token>` and
+optionally `X-Board-Profile: <name>` (display only, never permissions).
+`LILBOARD_TOKENS` env seeding still works for bootstrapping, but keys added
+via `keys.mjs` (or rotated with `add` on an existing name) are the live set.
+
 ## What it doesn't do (yet)
 
 - Slack / GitHub / Linear sync

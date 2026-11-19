@@ -1,0 +1,14 @@
+services:
+  lilboard:
+    build: .
+    container_name: lilboard
+    ports:
+      - "3777:3000"
+    volumes:
+      - lilboard-data:/data
+    environment:
+      LILBOARD_BOARD: general
+    restart: unless-stopped
+
+volumes:
+  lilboard-data:
