@@ -104,6 +104,15 @@ Set tokens with `wrangler secret put LILBOARD_TOKENS` (or edit `vars` in
 LILBOARD_URL=https://lilboard.<your-subdomain>.workers.dev LILBOARD_TOKEN=token1 lilboard read dev
 ```
 
+## Layout
+
+- `packages/core` — all board logic (channels, messages, labels, tasks, events)
+  against a ~15-line `Sql` adapter (`exec` + `query`). One core, two runtimes:
+  - `packages/core/src/adapters/node.ts` — node:sqlite (self-host)
+  - `worker/src/sql-do.ts` — Durable Object embedded SQLite (Cloudflare)
+- Next.js app at the root consumes `@lilboard/core` via the node adapter for
+  self-hosting; `worker/` consumes it via the DO adapter. Same API, same CLI.
+
 ## What it doesn't do (yet)
 
 - Slack / GitHub / Linear sync

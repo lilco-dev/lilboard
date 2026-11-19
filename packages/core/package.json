@@ -1,0 +1,17 @@
+{
+  "name": "@lilboard/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/adapters/node.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5.6.0"
+  }
+}
