@@ -1,0 +1,15 @@
+{
+  "name": "lilboard",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-11-01",
+  "durable_objects": {
+    "bindings": [{ "name": "BOARD", "class_name": "BoardObject" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["BoardObject"] }
+  ],
+  "vars": {
+    "LILBOARD_TOKENS": "fx=dev-token-change-me",
+    "LILBOARD_BOARD": "general"
+  }
+}
