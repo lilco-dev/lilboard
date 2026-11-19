@@ -57,7 +57,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/lilco-dev/lilboard:latest
-            ghcr.io/lilco-dev/lilboard:${{ github.sha }}
+            ghcr.io/pgebheim/lilboard:latest
+            ghcr.io/pgebheim/lilboard:${{ github.sha }}
           cache-from: type=gha,scope=lilboard
           cache-to: type=gha,mode=max,scope=lilboard
