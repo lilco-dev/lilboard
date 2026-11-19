@@ -7,7 +7,14 @@ import { SCHEMA } from "@lilboard/core";
 const dataDir = process.env.LILBOARD_DATA ?? path.join(process.cwd(), "data");
 fs.mkdirSync(dataDir, { recursive: true });
 
-export const db = new DatabaseSync(path.join(dataDir, "lilboard.db"));
+// During `next build`, page-data collection imports route modules in
+// parallel workers — all would open (and seed) the same SQLite file.
+// Use an ephemeral in-memory DB for the build phase; runtime is unaffected.
+const isBuild = process.env.NEXT_PHASE === "phase-production-build";
+
+export const db = new DatabaseSync(
+  isBuild ? ":memory:" : path.join(dataDir, "lilboard.db")
+);
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA foreign_keys = ON;");
 db.exec(SCHEMA);
