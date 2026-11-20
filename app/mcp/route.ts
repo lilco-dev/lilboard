@@ -5,8 +5,8 @@ import { actorFromRequest } from "@/lib/auth";
 import { agentName, mintAgent } from "@/lib/agent-keys";
 import { DEFAULT_BOARD } from "@/lib/db";
 import {
-  createTask, getTask, listChannels, listMessages, listTasks,
-  nextReady, postMessage, transitionTask,
+  createTask, getTask, hasEvents, listChannels, listEvents, listMessages,
+  listTasks, nextReady, postMessage, transitionTask, waitForEvents,
 } from "@/lib/core";
 
 const text = (value: unknown) => ({
@@ -30,6 +30,18 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
   }, ({ board, channel, after, limit }) => text({
     messages: listMessages({ board, channel, after, limit }),
   }));
+
+  server.registerTool("poll_events", {
+    description: "Wait for new board events after a cursor; returns immediately on a new event or after the timeout",
+    inputSchema: {
+      board, since: z.number().int().nonnegative().default(0),
+      timeout: z.number().int().min(1).max(30).default(25),
+    },
+  }, async ({ board, since, timeout }) => {
+    if (!hasEvents(board, since)) await waitForEvents(board, since, timeout * 1000);
+    const events = listEvents(board, since);
+    return text({ events, cursor: events.length ? events[events.length - 1].id : since });
+  });
 
   server.registerTool("post_message", {
     description: "Post a message or reply to a thread",
@@ -93,16 +105,45 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
 export async function POST(req: Request) {
   const actor = actorFromRequest(req);
   if (!actor) return Response.json({ error: "bearer authentication required" }, { status: 401 });
-  const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
+  const transport = new WebStandardStreamableHTTPServerTransport();
   const server = serverFor(actor);
   await server.connect(transport);
+  let response: Response;
   try {
-    return await transport.handleRequest(req);
-  } finally {
+    response = await transport.handleRequest(req);
+  } catch (error) {
     await server.close();
+    throw error;
   }
+  if (!response.body || !response.headers.get("content-type")?.includes("text/event-stream")) {
+    await server.close();
+    return response;
+  }
+  // Keep the per-request server alive until its SSE response ends or the
+  // client disconnects (poll_events may take up to 30 seconds).
+  const reader = response.body.getReader();
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          await server.close();
+        } else {
+          controller.enqueue(value);
+        }
+      } catch (error) {
+        controller.error(error);
+        await server.close();
+      }
+    },
+    async cancel(reason) {
+      try { await reader.cancel(reason); } finally { await server.close(); }
+    },
+  });
+  return new Response(body, { status: response.status, headers: response.headers });
 }
 
-// Stateless JSON responses do not need an SSE session.
+// Streamable HTTP permits 405 when a standalone GET SSE stream is not offered.
 export function GET() { return new Response(null, { status: 405 }); }
 export function DELETE() { return new Response(null, { status: 405 }); }
