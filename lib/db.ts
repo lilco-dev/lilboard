@@ -47,17 +47,18 @@ function seedActor(name: string, token: string, kind: string) {
   insert.run(name, hashToken(token), kind);
 }
 
-// Seed from a lilvault-style keys dir (LILBOARD_KEYS_DIR): one
-// <name>.token file per agent, <name>.person.token marks a human actor.
+// Seed from a lilvault-style keys dir (LILBOARD_KEYS_DIR): one token file
+// per actor — <name>.token, <name>.person.token, or <name>.admin.token
+// (admins can mint and revoke tokens via /api/auth/agents).
 const keysDir = process.env.LILBOARD_KEYS_DIR;
 if (keysDir) {
   for (const f of fs.readdirSync(keysDir)) {
-    const m = /^(.+?)\.(person\.)?token$/.exec(f);
+    const m = /^(.+?)\.(person\.|admin\.)?token$/.exec(f);
     if (m) {
       seedActor(
         m[1],
         fs.readFileSync(path.join(keysDir, f), "utf8").trim(),
-        m[2] ? "person" : "agent"
+        m[2] ? m[2].replace(".", "") : "agent"
       );
     }
   }

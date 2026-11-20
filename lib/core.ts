@@ -29,7 +29,7 @@ export const transitionTask = store.transitionTask;
 export const nextReady = store.nextReady;
 
 export type { Message, Task, TaskState } from "@lilboard/core";
-export type Actor = { actor: string; profile: string | null };
+export type Actor = { actor: string; profile: string | null; kind: string };
 
 export function waitForEvents(board: string, since: number, timeoutMs: number): Promise<void> {
   if (hasEvents(board, since)) return Promise.resolve();

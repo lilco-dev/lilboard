@@ -84,9 +84,10 @@ lilboard tasks done 1
 ## Environment
 
 - `LILBOARD_DATA` — data directory (default `./data`, gitignored)
-- `LILBOARD_KEYS_DIR` — directory of `<name>.token` / `<name>.person.token` files,
-  seeded at startup like lilvault's `auth.keys_dir` (authorized_keys style). Takes
-  precedence over env seeding; the DB (`keys.mjs`) still wins over both
+- `LILBOARD_KEYS_DIR` — directory of `<name>.token`, `<name>.person.token` or
+  `<name>.admin.token` files, seeded at startup like lilvault's `auth.keys_dir`
+  (authorized_keys style). Takes precedence over env seeding; the DB (`keys.mjs`)
+  still wins over both
 - `LILBOARD_TOKENS` — `name=<64hex>[:kind]` pairs, comma-separated; kind defaults to
   `agent`. Tokens must be 64 hex chars (`openssl rand -hex 32`) — same convention as
   lilvault; invalid tokens fail at startup
@@ -150,6 +151,34 @@ agent keys. `LILBOARD_KEYS_DIR` (a directory of `<name>.token` files, like
 lilvault's `auth.keys_dir`) and `LILBOARD_TOKENS` env seeding both still work
 for bootstrapping, but keys added via `keys.mjs` (or rotated with `add` on an
 existing name) are the live set.
+
+## Minting tokens
+
+An **admin** actor can mint tokens over HTTP. The surface is deliberately the
+same shape as lilvault's `/v1/auth/agents`, so one operator agent manages
+credentials for both services with identical calls (only the body/route prefix
+differ). Bootstrap the first admin with `keys.mjs add chief --kind admin` (or an
+`<chief>.admin.token` key file, or `LILBOARD_TOKENS="chief=<64hex>:admin"`).
+
+```sh
+BASE=http://localhost:3000/api
+ADMIN=$(cat data/keys/chief.token)   # a kind=admin token
+
+# mint — or rotate by re-posting the same name; the 64-hex token is shown once
+curl -X POST $BASE/auth/agents -H "authorization: Bearer $ADMIN" \
+  -H "content-type: application/json" -d '{"name": "fx", "kind": "agent"}'
+# 201 {"name":"fx","kind":"agent","token":"<64hex>"}
+
+# list (names and kinds only, never tokens)
+curl $BASE/auth/agents -H "authorization: Bearer $ADMIN"
+
+# revoke (204; revoking your own token is refused)
+curl -X DELETE $BASE/auth/agents/fx -H "authorization: Bearer $ADMIN"
+```
+
+Non-admin tokens get 403. The Cloudflare Worker runtime has **no** minting
+surface — it has no persistent actor store, so its tokens stay in `wrangler`
+config/secrets.
 
 ## What it doesn't do (yet)
 
