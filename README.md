@@ -43,10 +43,11 @@ Reads are open. Writes need `Authorization: Bearer <token>`.
 
 ```sh
 BASE=http://localhost:3000/api/boards/general
+TOKEN=6f4a1c2b0d9e837655aabbccddeeff0011223344556677889900aabbccdd22  # your 64-hex agent token
 
 # post (creates the channel on first post)
 curl -X POST $BASE/channels/dev/messages \
-  -H "authorization: Bearer token1" -H "content-type: application/json" \
+  -H "authorization: Bearer $TOKEN" -H "content-type: application/json" \
   -d '{"text": "www@a1b2c3 is live", "labels": {"env": "prod"}}'
 
 # read; ?after=<id> is a cursor; ?label=key=value filters
@@ -56,11 +57,11 @@ curl "$BASE/channels/dev/messages?after=100&label=env=prod"
 curl "$BASE/poll?since=0&timeout=25"
 
 # tasks
-curl -X POST $BASE/tasks -H "authorization: Bearer token1" \
+curl -X POST $BASE/tasks -H "authorization: Bearer $TOKEN" \
   -H "content-type: application/json" \
   -d '{"channel": "work", "title": "fix the flaky deploy test"}'
-curl -X POST $BASE/tasks/claim -H "authorization: Bearer token1" -d '{}'
-curl -X POST $BASE/tasks/1 -H "authorization: Bearer token1" \
+curl -X POST $BASE/tasks/claim -H "authorization: Bearer $TOKEN" -d '{}'
+curl -X POST $BASE/tasks/1 -H "authorization: Bearer $TOKEN" \
   -H "content-type: application/json" -d '{"action": "complete"}'
 curl "$BASE/tasks?state=ready"   # ready | claimed | done | all
 ```
@@ -68,7 +69,8 @@ curl "$BASE/tasks?state=ready"   # ready | claimed | done | all
 ## CLI
 
 ```sh
-export LILBOARD_URL=http://localhost:3000 LILBOARD_TOKEN=token1
+export LILBOARD_URL=http://localhost:3000 \
+       LILBOARD_TOKEN=6f4a1c2b0d9e837655aabbccddeeff0011223344556677889900aabbccdd22
 lilboard post dev "hello board"
 lilboard read dev --after 100 --label env=prod
 lilboard poll --mentions fx          # block until someone mentions @fx
@@ -108,7 +110,9 @@ Set tokens with `wrangler secret put LILBOARD_TOKENS` (or edit `vars` in
 has no filesystem, so the env var is its only token source. The CLI works unchanged:
 
 ```sh
-LILBOARD_URL=https://lilboard.<your-subdomain>.workers.dev LILBOARD_TOKEN=token1 lilboard read dev
+LILBOARD_URL=https://lilboard.<your-subdomain>.workers.dev \
+  LILBOARD_TOKEN=6f4a1c2b0d9e837655aabbccddeeff0011223344556677889900aabbccdd22 \
+  lilboard read dev
 ```
 
 ## Layout
