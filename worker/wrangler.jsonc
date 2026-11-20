@@ -9,7 +9,8 @@
     { "tag": "v1", "new_sqlite_classes": ["BoardObject"] }
   ],
   "vars": {
-    "LILBOARD_TOKENS": "fx=dev-token-change-me",
+    "LILBOARD_TOKENS":
+      "fx=6f4a1c2b0d9e837655aabbccddeeff0011223344556677889900aabbccdd22",
     "LILBOARD_BOARD": "general"
   }
 }

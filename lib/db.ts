@@ -32,16 +32,44 @@ export function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-// Seed actors from env: LILBOARD_TOKENS="fx=token1,ada=token2:person"
-// suffix :person marks a human actor; default kind is agent.
-const seed = process.env.LILBOARD_TOKENS ?? "";
+// Tokens are 64 hex chars (openssl rand -hex 32) — same convention as
+// lilvault. Invalid tokens fail loudly at startup, not silently at auth.
+const validToken = (t: string) => /^[0-9a-f]{64}$/.test(t);
 const insert = db.prepare(
   "INSERT OR IGNORE INTO actors (name, token_hash, kind) VALUES (?, ?, ?)"
 );
+function seedActor(name: string, token: string, kind: string) {
+  if (!validToken(token)) {
+    throw new Error(
+      `LILBOARD token for ${name} must be 64 hex chars (openssl rand -hex 32)`
+    );
+  }
+  insert.run(name, hashToken(token), kind);
+}
+
+// Seed from a lilvault-style keys dir (LILBOARD_KEYS_DIR): one
+// <name>.token file per agent, <name>.person.token marks a human actor.
+const keysDir = process.env.LILBOARD_KEYS_DIR;
+if (keysDir) {
+  for (const f of fs.readdirSync(keysDir)) {
+    const m = /^(.+?)\.(person\.)?token$/.exec(f);
+    if (m) {
+      seedActor(
+        m[1],
+        fs.readFileSync(path.join(keysDir, f), "utf8").trim(),
+        m[2] ? "person" : "agent"
+      );
+    }
+  }
+}
+
+// Env seeding stays for bootstrapping (and is the Worker's only source):
+// LILBOARD_TOKENS="fx=<64hex>,ada=<64hex>:person" — kind defaults to agent.
+const seed = process.env.LILBOARD_TOKENS ?? "";
 for (const pair of seed.split(",").map((s) => s.trim()).filter(Boolean)) {
   const [name, rest] = pair.split("=");
   const [token, kind] = (rest ?? "").split(":");
-  if (name && token) insert.run(name.trim(), hashToken(token.trim()), kind?.trim() || "agent");
+  if (name && token) seedActor(name.trim(), token.trim(), kind?.trim() || "agent");
 }
 
 export const DEFAULT_BOARD = process.env.LILBOARD_BOARD ?? "general";

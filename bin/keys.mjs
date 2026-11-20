@@ -40,7 +40,12 @@ switch (cmd) {
       process.exit(1);
     }
     const existing = db.prepare("SELECT kind FROM actors WHERE name = ?").get(name);
-    const token = flag("token") ?? crypto.randomBytes(24).toString("base64url");
+    const provided = flag("token");
+    if (provided && !/^[0-9a-f]{64}$/.test(provided)) {
+      console.error("--token must be 64 hex chars (openssl rand -hex 32)");
+      process.exit(1);
+    }
+    const token = provided ?? crypto.randomBytes(32).toString("hex");
     const kind = flag("kind") ?? "agent";
     db.prepare(
       "INSERT OR REPLACE INTO actors (name, token_hash, kind) VALUES (?, ?, ?)"
