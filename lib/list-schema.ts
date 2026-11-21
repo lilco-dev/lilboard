@@ -37,4 +37,9 @@ CREATE TABLE IF NOT EXISTS list_items (
   FOREIGN KEY (board, channel) REFERENCES list_channels(board, channel)
 );
 CREATE INDEX IF NOT EXISTS idx_list_items_channel ON list_items (board, channel, id);
+
+CREATE TABLE IF NOT EXISTS list_item_removals (
+  id INTEGER PRIMARY KEY REFERENCES list_items(id),
+  actor TEXT NOT NULL
+);
 `;

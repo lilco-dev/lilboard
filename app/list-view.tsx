@@ -4,6 +4,7 @@ import { Badge, EmptyState } from "@lilco/ui";
 import { listMessages } from "@/lib/core";
 import { type BoardList, type ListItem } from "@/lib/lists";
 import { DateStamp, MessageList, ViewTitle, type WorkspaceHref } from "./views";
+import { ItemEditor } from "./item-editor";
 import styles from "./board.module.css";
 
 export function filterOptions(list: BoardList) {
@@ -19,11 +20,19 @@ export function filterOptions(list: BoardList) {
 
 type Filter = ReturnType<typeof filterOptions>[number];
 
-function ItemValue({ value, format }: { value: ListItem["fields"][string] | undefined; format?: "uri" }) {
+function ItemValue({ fields, name, format }: { fields: ListItem["fields"]; name: string; format?: "uri" }) {
+  const value = fields[name];
   if (value === undefined || value === "") return <>—</>;
   if (typeof value === "boolean") return <>{value ? "Yes" : "No"}</>;
-  if (typeof value === "string" && format === "uri" && /^https?:\/\//i.test(value)) {
-    return <a href={value} rel="noreferrer">{value}</a>;
+  if (typeof value === "string" && format === "uri") {
+    const url = URL.parse(value);
+    if (url?.protocol === "https:" || url?.protocol === "http:") {
+      const text = fields[`${name}_text`];
+      const bare = url.href.replace(/^https?:\/\//, "");
+      return <a href={url.href} title={url.href} rel="noreferrer">
+        {typeof text === "string" && text.trim() ? text.trim() : bare.length > 36 ? `${bare.slice(0, 35)}…` : bare}
+      </a>;
+    }
   }
   return <>{value}</>;
 }
@@ -41,21 +50,24 @@ export function ListView({ list, items, board, filter, before, selected, href }:
   return (
     <>
       <ViewTitle title={list.title}>{list.schema.description ?? "Items in this list. Open a row for details and discussion."}</ViewTitle>
-      {choices.length > 0 && (
-        <Form action="/" className={styles.filters} aria-label="Filter items" key={filter?.id ?? "all"}>
-          <input type="hidden" name="board" value={board} />
-          <input type="hidden" name="channel" value={list.channel} />
-          <label>
-            <span className="lil-eyebrow">Filter</span>
-            <select name="filter" defaultValue={filter?.id ?? ""}>
-              <option value="">All items</option>
-              {choices.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}
-            </select>
-          </label>
-          <button type="submit">Apply filter</button>
-          {filter && <Link href={href({ filter: undefined, before: undefined })}>Clear filter</Link>}
-        </Form>
-      )}
+      <div className={styles.listToolbar}>
+        {choices.length > 0 && (
+          <Form action="/" className={styles.filters} aria-label="Filter items" key={filter?.id ?? "all"}>
+            <input type="hidden" name="board" value={board} />
+            <input type="hidden" name="channel" value={list.channel} />
+            <label>
+              <span className="lil-eyebrow">Filter</span>
+              <select name="filter" defaultValue={filter?.id ?? ""}>
+                <option value="">All items</option>
+                {choices.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}
+              </select>
+            </label>
+            <button type="submit">Apply filter</button>
+            {filter && <Link href={href({ filter: undefined, before: undefined })}>Clear filter</Link>}
+          </Form>
+        )}
+        <ItemEditor board={board} channel={list.channel} schema={list.schema} />
+      </div>
       <div className={styles.panel}>
         {items.length === 0 ? (
           <EmptyState title="No items">{filter ? "No items match this filter." : "Items added by people or agents will show up here."}</EmptyState>
@@ -75,7 +87,9 @@ export function ListView({ list, items, board, filter, before, selected, href }:
                     ) : (
                       <>
                         <span className={styles.listFieldLabel} aria-hidden="true">{column.title ?? name}</span>
-                        {column.enum && value !== undefined ? <Badge>{value}</Badge> : <ItemValue value={value} format={column.format} />}
+                        {column.enum && column.format !== "uri" && value !== undefined
+                          ? <Badge>{value}</Badge>
+                          : <ItemValue fields={item.fields} name={name} format={column.format} />}
                       </>
                     )}</td>;
                   })}
@@ -96,12 +110,17 @@ export function ListItemDetail({ list, item, board }: { list: BoardList; item: L
 
   return (
     <div className={styles.taskDetail}>
-      <h3>{item.fields.title}</h3>
+      <div className={styles.itemHeading}>
+        <h3>{item.fields.title}</h3>
+        <ItemEditor board={board} channel={list.channel} schema={list.schema} item={item} />
+      </div>
       <dl className={styles.itemFields}>
-        {Object.entries(list.schema.properties).filter(([name]) => name !== "title").map(([name, field]) => (
+        {Object.entries(list.schema.properties).filter(([name]) =>
+          name !== "title" && !(name.endsWith("_text") && list.schema.properties[name.slice(0, -5)]?.format === "uri")
+        ).map(([name, field]) => (
           <div key={name}>
             <dt>{field.title ?? name}</dt>
-            <dd><ItemValue value={item.fields[name]} format={field.format} /></dd>
+            <dd><ItemValue fields={item.fields} name={name} format={field.format} /></dd>
           </div>
         ))}
       </dl>

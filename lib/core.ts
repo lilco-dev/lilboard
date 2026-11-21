@@ -33,8 +33,10 @@ export function postMessage(input: Parameters<typeof store.postMessage>[0]) {
   const board = input.board ?? DEFAULT_BOARD;
   if (isList(board, input.channel) && (
     !Number.isSafeInteger(input.thread) ||
-    !db.prepare("SELECT 1 FROM list_items WHERE board = ? AND channel = ? AND id = ?")
-      .get(board, input.channel, input.thread ?? null)
+    !db.prepare(`
+      SELECT 1 FROM list_items i WHERE board = ? AND channel = ? AND id = ?
+      AND NOT EXISTS (SELECT 1 FROM list_item_removals r WHERE r.id = i.id)
+    `).get(board, input.channel, input.thread ?? null)
   )) {
     throw new ListError("Add a list item for new records; post messages as replies to an item.");
   }

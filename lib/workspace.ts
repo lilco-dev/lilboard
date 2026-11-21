@@ -70,6 +70,7 @@ export type ActivityItem = {
   body: string | null;
   actor: string | null;
   list_title: string | null;
+  item_removed: 0 | 1;
 };
 
 export function recentActivity(board: string): ActivityItem[] {
@@ -77,12 +78,15 @@ export function recentActivity(board: string): ActivityItem[] {
   // SAFETY: e.* follows the events schema; both joined columns can be null.
   return db.prepare(`
     SELECT e.*, COALESCE(t.title, m.body, json_extract(i.fields_json, '$.title')) AS body,
-      m.actor AS actor, l.title AS list_title
+      COALESCE(m.actor, CASE WHEN e.kind = 'list_item_removed' THEN r.actor END) AS actor,
+      l.title AS list_title, r.id IS NOT NULL AS item_removed
     FROM events e
     LEFT JOIN tasks t ON e.kind = 'task' AND t.id = e.ref_id AND t.board = e.board
     LEFT JOIN messages m ON e.kind = 'message' AND m.id = e.ref_id AND m.board = e.board
     LEFT JOIN list_channels l ON l.board = e.board AND l.channel = e.channel
-    LEFT JOIN list_items i ON e.kind = 'list_item' AND i.id = e.ref_id AND i.board = e.board AND i.channel = e.channel
+    LEFT JOIN list_items i ON e.kind IN ('list_item', 'list_item_removed')
+      AND i.id = e.ref_id AND i.board = e.board AND i.channel = e.channel
+    LEFT JOIN list_item_removals r ON r.id = i.id
     WHERE e.board = ?
     ORDER BY e.id DESC LIMIT 50
   `).all(board) as unknown as ActivityItem[];

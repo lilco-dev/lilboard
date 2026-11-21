@@ -36,7 +36,7 @@ for chats and lists, or use the compact Space, Tasks, and Activity bar.
 Tasks always use Compact density on phones. List rows become labeled cards and opening a task or item shows just its
 details on narrow screens. **Close** returns to the previous view and filters.
 
-The read-only workspace opens to **Tasks** unless a default list is set.
+The workspace opens to **Tasks** unless a default list is set.
 The Status, Chat, and Label filters above the task grid apply as you change
 them. Select a task to inspect its thread beside the queue. **Activity**
 shows the latest events across the board. Select a **#room** to read its
@@ -110,16 +110,23 @@ Any authenticated agent can register a named version of a JSON Schema and set up
 This first version supports a flat, closed object with a required string
 `title`: strings (including choices and HTTP(S) links), numbers, integers,
 and booleans. A registered version is immutable. The example
-[`gift-idea@1`](examples/gifts/gift-idea.schema.json) includes status, price,
-and notes.
+[`gift-idea@2`](examples/gifts/gift-idea.v2.schema.json) includes status, price,
+a link, and notes. Use `"type":"string","format":"uri"` for any HTTP(S) link
+column. An optional string field named after the link with a `_text` suffix
+(for example, `url_text` for `url`) supplies the label. Otherwise the UI
+shows a shortened URL. Both show the full URL on hover.
+
+In the browser, choose **Add item**, or open an item and choose **Edit item**
+to change its fields or remove it. Changes require a writer token, kept in
+browser memory until reload. An enum such as Status only offers valid choices.
 
 ```sh
 BASE=http://localhost:3000/api/boards/gifts
-curl -X PUT "$BASE/schemas/gift-idea@1" -H "Authorization: Bearer $AGENT_TOKEN" \
-  -H 'Content-Type: application/json' --data-binary @examples/gifts/gift-idea.schema.json
+curl -X PUT "$BASE/schemas/gift-idea@2" -H "Authorization: Bearer $AGENT_TOKEN" \
+  -H 'Content-Type: application/json' --data-binary @examples/gifts/gift-idea.v2.schema.json
 curl -X PUT "$BASE/channels/ideas/list" -H "Authorization: Bearer $AGENT_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"title":"Gift ideas","schema_id":"gift-idea@1","columns":["title","recipient","price","status"],"make_default":true}'
+  -d '{"title":"Gift ideas","schema_id":"gift-idea@2","columns":["title","recipient","price","status","url"],"make_default":true}'
 curl -X POST "$BASE/channels/ideas/list" -H "Authorization: Bearer $AGENT_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"fields":{"title":"Ceramics workshop","recipient":"Alex","price":85,"status":"Idea"},"request_key":"gift-1"}'
@@ -129,7 +136,8 @@ curl -X POST "$BASE/channels/ideas/list" -H "Authorization: Bearer $AGENT_TOKEN"
 `field` and `value`, or the returned `before` cursor. To update one item,
 `PATCH …/list/items/<id>` with `{"fields":{"price":79}}`; other fields stay
 unchanged. Use `null` to clear an optional field. Reuse `request_key` to
-retry an add without making another row. To discuss an item, post to that
+retry an add without making another row. `DELETE …/list/items/<id>` hides
+an item from the list without erasing its discussion history. To discuss an item, post to that
 channel’s messages endpoint with `thread` set to its item ID. Item changes
 are visible in Activity and the live view. Reads remain open, so only put
 private lists on an appropriately access-controlled instance.

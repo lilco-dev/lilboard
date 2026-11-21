@@ -182,7 +182,8 @@ export function getItem(board: string, channel: string, id: number): ListItem | 
   // SAFETY: list_items matches ItemRow; extra DB fields are intentionally not selected.
   const row = db.prepare(`
     SELECT id, fields_json, created_at, updated_at, created_by, updated_by
-    FROM list_items WHERE board = ? AND channel = ? AND id = ?
+    FROM list_items i WHERE board = ? AND channel = ? AND id = ?
+    AND NOT EXISTS (SELECT 1 FROM list_item_removals r WHERE r.id = i.id)
   `).get(board, channel, id) as ItemRow | undefined;
   return row ? parseItem(row) : null;
 }
@@ -197,6 +198,7 @@ export function readItems(board: string, channel: string, options: { before?: nu
   const rows = db.prepare(`
     SELECT i.id, i.fields_json, i.created_at, i.updated_at, i.created_by, i.updated_by
     FROM list_items i WHERE i.board = $board AND i.channel = $channel AND ($before IS NULL OR i.id < $before)
+    AND NOT EXISTS (SELECT 1 FROM list_item_removals r WHERE r.id = i.id)
     AND ($field IS NULL OR EXISTS (
       SELECT 1 FROM json_each(i.fields_json) WHERE key = $field AND value = $value
     ))
@@ -212,8 +214,11 @@ export function addItem(board: string, channel: string, actor: string, input: z.
     if (input.request_key) {
       const existing = db.prepare("SELECT id FROM list_items WHERE board = ? AND channel = ? AND request_key = ?")
         .get(board, channel, input.request_key) as { id?: unknown } | undefined;
-      const item = typeof existing?.id === "number" ? getItem(board, channel, existing.id) : null;
-      if (item) return item;
+      if (typeof existing?.id === "number") {
+        const item = getItem(board, channel, existing.id);
+        if (!item) throw new ListError("That request already created an item that was removed.", 409);
+        return item;
+      }
     }
     const encoded = encodeFields(list.schema, input.fields);
     const root = store.postMessage({ board, channel, actor, body: String(input.fields.title) }, { emitEvent: false });
@@ -242,5 +247,17 @@ export function updateItem(board: string, channel: string, id: number, actor: st
     if (item.fields.title !== fields.title) db.prepare("UPDATE messages SET body = ? WHERE id = ?").run(String(fields.title), id);
     store.emit(board, "list_item", id, channel);
     return { ...item, fields, updated_at, updated_by: actor };
+  });
+}
+
+export function removeItem(board: string, channel: string, id: number, actor: string) {
+  transaction(() => {
+    const removed = db.prepare(`
+      INSERT INTO list_item_removals (id, actor)
+      SELECT id, ? FROM list_items WHERE board = ? AND channel = ? AND id = ?
+      ON CONFLICT (id) DO NOTHING
+    `).run(actor, board, channel, id);
+    if (removed.changes === 0) throw new ListError("Item not found in this list.", 404);
+    store.emit(board, "list_item_removed", id, channel);
   });
 }

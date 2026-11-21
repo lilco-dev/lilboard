@@ -153,6 +153,7 @@ export function TaskDetail({ task, roomHref }: { task: Task; roomHref: string })
 
 const eventNames: Record<string, string> = {
   task: "Task updated", message: "Message posted", list: "List created", list_item: "List item saved",
+  list_item_removed: "List item removed",
 };
 
 export function Activity({ events, href }: { events: ActivityItem[]; href: WorkspaceHref }) {
@@ -176,7 +177,7 @@ export function Activity({ events, href }: { events: ActivityItem[]; href: Works
                     <Link href={href({ view: "activity", task: String(event.ref_id) })}>
                       {event.body ?? `Task #${event.ref_id}`}
                     </Link>
-                  ) : event.kind === "list_item" && event.channel ? (
+                  ) : event.kind === "list_item" && event.channel && !event.item_removed ? (
                     <Link href={href({ channel: event.channel, item: String(event.ref_id) })}>{event.body ?? `Item #${event.ref_id}`}</Link>
                   ) : <p className={styles.eventBody}>{event.body}</p>}
                   {event.channel && (

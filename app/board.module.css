@@ -409,6 +409,24 @@ a[aria-current="page"] .navMark {
   font: 600 0.75rem/1.5 var(--lil-mono);
 }
 
+.listToolbar,
+.itemHeading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: end;
+  gap: 0.5rem;
+}
+
+.listToolbar {
+  margin-bottom: 1rem;
+}
+
+.listToolbar .filters,
+.itemHeading h3 {
+  margin-bottom: 0;
+}
+
 .listScroll {
   overflow-x: auto;
 }

@@ -47,7 +47,7 @@ export function CommandPalette({ destinations }: { destinations: Destination[] }
     function keydown(event: globalThis.KeyboardEvent) {
       const target = event.target;
       const editing = target instanceof Element && target.closest(
-        "input, textarea, select, [role=textbox], [contenteditable]:not([contenteditable=false])",
+        "input, textarea, select, dialog[open], [role=textbox], [contenteditable]:not([contenteditable=false])",
       );
       if (event.defaultPrevented || event.isComposing || event.repeat || editing || dialog.current?.open) {
         prefixUntil = 0;
