@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { requireActor, requireAdmin } from "@/lib/auth";
+import { requireActor } from "@/lib/auth";
 import { listErrorResponse } from "@/lib/core";
 import { addItem, addItemInput, createList, createListInput, itemId, parseInput, readItems } from "@/lib/lists";
 
@@ -20,8 +20,8 @@ export async function GET(req: NextRequest, { params }: Params) {
 }
 
 export async function PUT(req: Request, { params }: Params) {
-  const admin = requireAdmin(req, "list setup");
-  if (admin instanceof Response) return admin;
+  const actor = requireActor(req);
+  if (actor instanceof Response) return actor;
   const { board, channel } = await params;
   try {
     const input = parseInput(createListInput, await req.json().catch(() => null));

@@ -1,6 +1,8 @@
 // Against a running self-hosted lilboard: MCP_URL=http://localhost:3987/mcp
 // MCP_TOKEN=<agent token> MCP_ADMIN_TOKEN=<admin token> node tests/mcp-smoke.mjs
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 const url = process.env.MCP_URL ?? "http://localhost:3987/mcp";
 const agent = process.env.MCP_TOKEN;
@@ -37,9 +39,42 @@ assert.equal(init.serverInfo.name, "lilboard");
 const tools = await call(agent, "tools/list");
 assert(tools.tools.some((tool) => tool.name === "post_message"));
 assert(tools.tools.some((tool) => tool.name === "poll_events"));
+for (const name of ["register_list_schema", "create_list", "suggest_feedback"]) {
+  assert(tools.tools.some((tool) => tool.name === name), `${name} should be available to agents`);
+}
 assert(!tools.tools.some((tool) => tool.name === "mint_agent"));
 const adminTools = await call(admin, "tools/list");
 assert(adminTools.tools.some((tool) => tool.name === "mint_agent"));
+const listBoard = `mcp-lists-${randomUUID()}`;
+const definition = JSON.parse(await readFile(new URL("../examples/gifts/gift-idea.schema.json", import.meta.url), "utf8"));
+const registered = await call(agent, "tools/call", {
+  name: "register_list_schema", arguments: { board: listBoard, schema_id: "gift-idea@1", definition },
+});
+assert(!registered.isError, JSON.stringify(registered));
+assert.equal(JSON.parse(registered.content[0].text).id, "gift-idea@1");
+const created = await call(agent, "tools/call", {
+  name: "create_list", arguments: { board: listBoard, channel: "ideas", title: "Gift ideas", schema_id: "gift-idea@1" },
+});
+assert(!created.isError, JSON.stringify(created));
+assert.equal(JSON.parse(created.content[0].text).list.channel, "ideas");
+const added = await call(agent, "tools/call", {
+  name: "add_list_item", arguments: {
+    board: listBoard, channel: "ideas", fields: { title: "A gift", recipient: "Alex", status: "Idea" },
+  },
+});
+assert(!added.isError, JSON.stringify(added));
+const feedback = await call(agent, "tools/call", {
+  name: "suggest_feedback", arguments: { kind: "bug", title: "Smoke test", description: "A test report." },
+});
+assert(!feedback.isError, JSON.stringify(feedback));
+const filed = JSON.parse(feedback.content[0].text).message;
+assert.equal(filed.channel, "feedback");
+assert.equal(filed.labels.feedback, "bug");
+assert.match(filed.body, /Smoke test/);
+const saved = await call(agent, "tools/call", {
+  name: "read_messages", arguments: { board: filed.board, channel: "feedback", after: filed.id - 1, limit: 1 },
+});
+assert.equal(JSON.parse(saved.content[0].text).messages[0].id, filed.id);
 const result = await call(agent, "tools/call", {
   name: "post_message", arguments: { board: "mcp-smoke", channel: "tests", text: "hello" },
 });

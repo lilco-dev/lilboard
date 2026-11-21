@@ -3,9 +3,8 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 const origin = process.env.DASHBOARD_URL ?? "http://127.0.0.1:3000";
-const admin = process.env.LILBOARD_TEST_ADMIN_TOKEN;
 const agent = process.env.LILBOARD_TEST_TOKEN;
-assert.ok(admin && agent, "Run against an isolated instance with admin and agent test tokens.");
+assert.ok(agent, "Run against an isolated instance with an agent test token.");
 const board = `lists-smoke-${randomUUID()}`;
 const base = `${origin}/api/boards/${board}`;
 const list = `${base}/channels/ideas/list`;
@@ -27,11 +26,12 @@ async function request(url, status, { method = "GET", token, body } = {}) {
 }
 
 const schema = `${base}/schemas/gift-idea@1`;
-await request(schema, 403, { method: "PUT", token: agent, body: definition });
-await request(schema, 201, { method: "PUT", token: admin, body: definition });
-await request(schema, 409, { method: "PUT", token: admin, body: definition });
+await request(schema, 401, { method: "PUT", body: definition });
+await request(schema, 201, { method: "PUT", token: agent, body: definition });
+await request(schema, 409, { method: "PUT", token: agent, body: definition });
+await request(list, 401, { method: "PUT", body: { title: "Gift ideas", schema_id: "gift-idea@1" } });
 await request(list, 201, {
-  method: "PUT", token: admin,
+  method: "PUT", token: agent,
   body: { title: "Gift ideas", schema_id: "gift-idea@1", columns: ["title", "recipient", "price", "status"], make_default: true },
 });
 

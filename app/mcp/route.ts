@@ -4,7 +4,10 @@ import { z } from "zod";
 import { actorFromRequest } from "@/lib/auth";
 import { agentName, mintAgent } from "@/lib/agent-keys";
 import { DEFAULT_BOARD } from "@/lib/db";
-import { addItem, addItemInput, itemId, listChannelsWithSchema, readItems, updateItem, updateItemInput } from "@/lib/lists";
+import {
+  addItem, addItemInput, createList, createListInput, itemId, listChannelsWithSchema,
+  listDefinition, readItems, registerListSchema, schemaId, updateItem, updateItemInput,
+} from "@/lib/lists";
 import {
   createTask, getTask, listChannels, listEvents, listMessages,
   listTasks, nextReady, postMessage, transitionTask, waitForEvents,
@@ -56,6 +59,18 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
       actor: actor.actor, profile: actor.profile }),
   }));
 
+  server.registerTool("suggest_feedback", {
+    description: "File a feature request, change, or bug in the feedback channel. Feedback is publicly readable; do not include secrets.",
+    inputSchema: {
+      kind: z.enum(["feature", "change", "bug"]),
+      title: z.string().trim().min(1).max(160),
+      description: z.string().trim().min(1).max(4000),
+    },
+  }, ({ kind, title, description }) => text({ message: postMessage({
+    board: DEFAULT_BOARD, channel: "feedback", body: `[${kind}] ${title}\n\n${description}`,
+    labels: { feedback: kind }, actor: actor.actor, profile: actor.profile,
+  }) }));
+
   server.registerTool("list_tasks", {
     description: "List tasks on a board",
     inputSchema: {
@@ -92,6 +107,16 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
   });
 
   const listChannel = z.string().min(1);
+  server.registerTool("register_list_schema", {
+    description: "Register an immutable schema version on a board before creating lists with it.",
+    inputSchema: { board, schema_id: schemaId, definition: listDefinition },
+  }, ({ board, schema_id, definition }) => text({ id: schema_id, schema: registerListSchema(board, schema_id, definition) }));
+
+  server.registerTool("create_list", {
+    description: "Create a schema-backed list in a board channel. The schema must already be registered.",
+    inputSchema: { board, channel: listChannel, ...createListInput.shape },
+  }, ({ board, channel, ...input }) => text({ list: createList(board, channel, input) }));
+
   server.registerTool("list_lists", {
     description: "List schema-backed lists in a space",
     inputSchema: { board },

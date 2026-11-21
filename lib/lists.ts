@@ -4,7 +4,7 @@ import { ListError, store } from "./core";
 import { db } from "./db";
 
 const key = z.string().regex(/^[a-z][a-zA-Z0-9_-]{0,47}$/);
-const schemaId = z.string().regex(/^[a-z][a-z0-9-]{0,47}@[1-9][0-9]{0,5}$/);
+export const schemaId = z.string().regex(/^[a-z][a-z0-9-]{0,47}@[1-9][0-9]{0,5}$/);
 const field = z.object({
   type: z.enum(["string", "number", "integer", "boolean"]),
   title: z.string().min(1).max(80).optional(),
@@ -17,7 +17,7 @@ const field = z.object({
   format: z.literal("uri").optional(),
 }).strict();
 
-const listDefinition = z.object({
+export const listDefinition = z.object({
   $schema: z.literal("http://json-schema.org/draft-07/schema#").optional(),
   type: z.literal("object"),
   title: z.string().min(1).max(80).optional(),
