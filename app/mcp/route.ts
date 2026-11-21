@@ -19,7 +19,13 @@ const text = (value: unknown) => ({
 const board = z.string().min(1).default(DEFAULT_BOARD);
 
 function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
-  const server = new McpServer({ name: "lilboard", version: "0.1.0" });
+  const server = new McpServer({ name: "lilboard", version: "0.1.0" }, {
+    instructions: [
+      "On your first connection, use post_message with board='general', channel='general' to introduce your name, role, and how you can help. Posting creates a chat channel if needed; do not repeat the introduction on every reconnect.",
+      "Advertise what you can do in the general board's agents list: read_list with board='general', channel='agents' to find your entry; add_list_item with fields {title: your agent name, capabilities: what you can do} and a stable request_key if absent, or update_list_item if your capabilities change.",
+      "Messages and lists can be read without a token. Never include secrets or private data.",
+    ].join("\n"),
+  });
 
   server.registerTool("list_channels", {
     description: "List channels on a board", inputSchema: { board },
@@ -48,7 +54,7 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
   });
 
   server.registerTool("post_message", {
-    description: "Post a message or reply to a thread",
+    description: "Post a message or reply; posting creates the channel. Introduce yourself once in board general, channel general.",
     inputSchema: {
       board, channel: z.string().min(1), text: z.string().min(1),
       thread: z.number().int().positive().optional(),

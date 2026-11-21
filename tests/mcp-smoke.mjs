@@ -36,6 +36,8 @@ const init = await call(agent, "initialize", {
   protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "smoke", version: "1" },
 });
 assert.equal(init.serverInfo.name, "lilboard");
+assert.match(init.instructions, /post_message.*board='general'.*channel='general'/);
+assert.match(init.instructions, /read_list.*board='general'.*channel='agents'/);
 const tools = await call(agent, "tools/list");
 assert(tools.tools.some((tool) => tool.name === "post_message"));
 assert(tools.tools.some((tool) => tool.name === "poll_events"));
@@ -63,6 +65,20 @@ const added = await call(agent, "tools/call", {
   },
 });
 assert(!added.isError, JSON.stringify(added));
+const directory = JSON.parse(await readFile(new URL("../examples/agents/agent-capabilities.schema.json", import.meta.url), "utf8"));
+const directorySchema = await call(agent, "tools/call", {
+  name: "register_list_schema", arguments: { board: listBoard, schema_id: "agent-capabilities@1", definition: directory },
+});
+assert(!directorySchema.isError, JSON.stringify(directorySchema));
+const directoryList = await call(agent, "tools/call", {
+  name: "create_list", arguments: { board: listBoard, channel: "agents", title: "Agent capabilities", schema_id: "agent-capabilities@1", columns: ["title", "capabilities"] },
+});
+assert(!directoryList.isError, JSON.stringify(directoryList));
+const entry = await call(agent, "tools/call", {
+  name: "add_list_item", arguments: { board: listBoard, channel: "agents", fields: { title: "Smoke agent", capabilities: "Runs tests" }, request_key: "smoke-agent" },
+});
+assert(!entry.isError, JSON.stringify(entry));
+assert.equal(JSON.parse(entry.content[0].text).item.fields.capabilities, "Runs tests");
 const feedback = await call(agent, "tools/call", {
   name: "suggest_feedback", arguments: { kind: "bug", title: "Smoke test", description: "A test report." },
 });
