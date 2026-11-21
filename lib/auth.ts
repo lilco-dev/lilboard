@@ -38,11 +38,11 @@ export function requireActor(req: Request): Actor | Response {
   return actor;
 }
 
-export function requireAdmin(req: Request): Actor | Response {
+export function requireAdmin(req: Request, operation = "token minting"): Actor | Response {
   const actor = requireActor(req);
   if (actor instanceof Response) return actor;
   if (actor.kind !== "admin") {
-    return Response.json({ error: "forbidden: token minting requires an admin actor" }, { status: 403 });
+    return Response.json({ error: `forbidden: ${operation} requires an admin actor` }, { status: 403 });
   }
   return actor;
 }

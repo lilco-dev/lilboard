@@ -1,4 +1,4 @@
-import { createTask, listTasks } from "@/lib/core";
+import { createTask, listErrorResponse, listTasks } from "@/lib/core";
 import { requireActor } from "@/lib/auth";
 
 
@@ -24,16 +24,20 @@ export async function POST(req: Request, { params }: Params) {
   const actor = requireActor(req);
   if (actor instanceof Response) return actor;
   const body = await req.json().catch(() => null);
-  if (!body?.title || !body?.channel) {
+  if (typeof body?.title !== "string" || !body.title || typeof body.channel !== "string" || !body.channel) {
     return Response.json({ error: "body must be JSON with title and channel" }, { status: 400 });
   }
-  const task = createTask({
-    board,
-    channel: body.channel,
-    title: body.title,
-    actor: actor.actor,
-    profile: actor.profile,
-    labels: body.labels,
-  });
-  return Response.json({ task }, { status: 201 });
+  try {
+    const task = createTask({
+      board,
+      channel: body.channel,
+      title: body.title,
+      actor: actor.actor,
+      profile: actor.profile,
+      labels: body.labels,
+    });
+    return Response.json({ task }, { status: 201 });
+  } catch (error) {
+    return listErrorResponse(error);
+  }
 }

@@ -1,4 +1,4 @@
-import { listEvents, hasEvents, waitForEvents } from "@/lib/core";
+import { listEvents, waitForEvents } from "@/lib/core";
 
 
 // Long-poll for new events. ?since=<event id> is the cursor,
@@ -10,9 +10,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ board: string }
   const since = Number(url.searchParams.get("since") ?? 0) || 0;
   const timeout = Math.min(Number(url.searchParams.get("timeout") ?? 25) || 25, 30);
 
-  if (!hasEvents(board, since)) {
-    await waitForEvents(board, since, timeout * 1000);
-  }
+  await waitForEvents(board, since, timeout * 1000, req.signal);
   const events = listEvents(board, since);
   return Response.json({
     events,

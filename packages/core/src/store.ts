@@ -33,7 +33,7 @@ export type BoardStore = ReturnType<typeof createBoardStore>;
 
 export function createBoardStore(
   sql: Sql,
-  opts: { defaultBoard?: string; onEmit?: () => void } = {}
+  opts: { defaultBoard?: string; onEmit?: (board: string) => void } = {}
 ) {
   const defaultBoard = opts.defaultBoard ?? "general";
   const now = () => Date.now();
@@ -47,7 +47,7 @@ export function createBoardStore(
       channel ?? null,
       now()
     );
-    opts.onEmit?.();
+    opts.onEmit?.(board);
   }
 
   function ensureChannel(board: string, path: string) {
@@ -60,14 +60,11 @@ export function createBoardStore(
   }
 
   function labelsOf(messageId: number): Labels {
-    const out: Labels = {};
-    for (const l of sql.query(
+    const rows = sql.query(
       "SELECT key, value FROM labels WHERE message_id = ?",
       messageId
-    ) as { key: string; value: string }[]) {
-      out[l.key] = l.value;
-    }
-    return out;
+    ) as { key: string; value: string }[];
+    return Object.fromEntries(rows.map(({ key, value }) => [key, value]));
   }
 
   function display(actor: string, profile: string | null): string {
@@ -75,13 +72,12 @@ export function createBoardStore(
   }
 
   function decorate(row: Row): Message {
-    const actor = row.actor as string;
-    const profile = (row.profile as string | null) ?? null;
+    // SAFETY: both callers select a full messages row; display and labels are derived here.
+    const message = row as unknown as Omit<Message, "display" | "labels">;
     return {
-      ...(row as unknown as Message),
-      profile,
-      display: display(actor, profile),
-      labels: labelsOf(row.id as number),
+      ...message,
+      display: display(message.actor, message.profile),
+      labels: labelsOf(message.id),
     };
   }
 
@@ -98,7 +94,7 @@ export function createBoardStore(
     profile?: string | null;
     thread?: number | null;
     labels?: Labels;
-  }): Message {
+  }, options: { emitEvent?: boolean } = {}): Message {
     const board = m.board ?? defaultBoard;
     ensureChannel(board, m.channel);
     const parent = m.thread ?? null;
@@ -125,7 +121,7 @@ export function createBoardStore(
         v
       );
     }
-    emit(board, "message", id, m.channel);
+    if (options.emitEvent !== false) emit(board, "message", id, m.channel);
     return getMessage(id)!;
   }
 
@@ -135,6 +131,8 @@ export function createBoardStore(
     after?: number;
     limit?: number;
     label?: { key: string; value?: string };
+    thread?: number;
+    latest?: boolean;
   }): Message[] {
     const board = o.board ?? defaultBoard;
     let qs = "SELECT m.* FROM messages m WHERE m.board = ? AND m.channel = ?";
@@ -142,6 +140,10 @@ export function createBoardStore(
     if (o.after) {
       qs += " AND m.id > ?";
       args.push(o.after);
+    }
+    if (o.thread !== undefined) {
+      qs += " AND m.thread_id = ?";
+      args.push(o.thread);
     }
     if (o.label) {
       qs += " AND EXISTS (SELECT 1 FROM labels l WHERE l.message_id = m.id AND l.key = ?";
@@ -152,7 +154,7 @@ export function createBoardStore(
       }
       qs += ")";
     }
-    qs += " ORDER BY m.id LIMIT ?";
+    qs += o.latest ? " ORDER BY m.id DESC LIMIT ?" : " ORDER BY m.id LIMIT ?";
     args.push(o.limit ?? 100);
     return sql.query(qs, ...args).map(decorate);
   }
@@ -173,6 +175,10 @@ export function createBoardStore(
       since,
       limit
     );
+  }
+
+  function latestEventId(board: string): number {
+    return Number(one(sql, "SELECT id FROM events WHERE board = ? ORDER BY id DESC LIMIT 1", board)?.id ?? 0);
   }
 
   function hasEvents(board: string, since: number): boolean {
@@ -271,11 +277,13 @@ export function createBoardStore(
 
   return {
     defaultBoard,
+    emit,
     postMessage,
     getMessage,
     listMessages,
     listChannels,
     listEvents,
+    latestEventId,
     hasEvents,
     createTask,
     getTask,

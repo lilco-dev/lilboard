@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
-  transpilePackages: ["@lilboard/core"],
+  transpilePackages: ["@lilboard/core", "@lilco/ui"],
   output: "standalone",
 };
 

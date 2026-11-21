@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@lilboard/core": "workspace:*",
+    "@lilco/ui": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "ajv": "^8.20.0",
     "next": "16.4.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",

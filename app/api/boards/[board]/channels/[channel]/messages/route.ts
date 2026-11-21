@@ -1,4 +1,4 @@
-import { listMessages, postMessage } from "@/lib/core";
+import { listErrorResponse, listMessages, postMessage } from "@/lib/core";
 import { requireActor } from "@/lib/auth";
 
 
@@ -36,14 +36,18 @@ export async function POST(req: Request, { params }: Params) {
   if (!body?.text || typeof body.text !== "string") {
     return Response.json({ error: "body must be JSON with a text field" }, { status: 400 });
   }
-  const message = postMessage({
-    board,
-    channel,
-    body: body.text,
-    actor: actor.actor,
-    profile: actor.profile,
-    thread: body.thread ?? null,
-    labels: body.labels,
-  });
-  return Response.json({ message }, { status: 201 });
+  try {
+    const message = postMessage({
+      board,
+      channel,
+      body: body.text,
+      actor: actor.actor,
+      profile: actor.profile,
+      thread: body.thread ?? null,
+      labels: body.labels,
+    });
+    return Response.json({ message }, { status: 201 });
+  } catch (error) {
+    return listErrorResponse(error);
+  }
 }

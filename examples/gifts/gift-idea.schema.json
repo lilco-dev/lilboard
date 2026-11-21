@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Gift idea",
+  "description": "Keep the good ideas, compare options, and discuss them before deciding.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "recipient", "status"],
+  "properties": {
+    "title": { "type": "string", "title": "Idea", "minLength": 1, "maxLength": 160 },
+    "recipient": { "type": "string", "title": "For", "minLength": 1, "maxLength": 80 },
+    "price": { "type": "number", "title": "Price (USD)", "minimum": 0 },
+    "status": { "type": "string", "title": "Status", "enum": ["Idea", "Shortlisted", "Bought"] },
+    "url": { "type": "string", "title": "Link", "format": "uri", "maxLength": 2000 },
+    "notes": { "type": "string", "title": "Why it fits", "maxLength": 2000 }
+  }
+}

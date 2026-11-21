@@ -1,0 +1,14 @@
+{
+  "name": "@lilco/ui",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.tsx",
+    "./tokens.css": "./src/tokens.css",
+    "./styles.css": "./src/styles.css"
+  },
+  "sideEffects": ["**/*.css"],
+  "peerDependencies": {
+    "react": "^19"
+  }
+}

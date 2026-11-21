@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { SCHEMA } from "@lilboard/core";
+import { LIST_SCHEMA } from "./list-schema";
 
 const dataDir = process.env.LILBOARD_DATA ?? path.join(process.cwd(), "data");
 fs.mkdirSync(dataDir, { recursive: true });
@@ -18,6 +19,7 @@ export const db = new DatabaseSync(
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA foreign_keys = ON;");
 db.exec(SCHEMA);
+db.exec(LIST_SCHEMA);
 // actors is a Node-runtime concern (tokens hashed from env); the Worker
 // authenticates from env before the request reaches the Durable Object.
 db.exec(`

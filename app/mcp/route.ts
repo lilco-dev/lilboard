@@ -4,8 +4,9 @@ import { z } from "zod";
 import { actorFromRequest } from "@/lib/auth";
 import { agentName, mintAgent } from "@/lib/agent-keys";
 import { DEFAULT_BOARD } from "@/lib/db";
+import { addItem, addItemInput, itemId, listChannelsWithSchema, readItems, updateItem, updateItemInput } from "@/lib/lists";
 import {
-  createTask, getTask, hasEvents, listChannels, listEvents, listMessages,
+  createTask, getTask, listChannels, listEvents, listMessages,
   listTasks, nextReady, postMessage, transitionTask, waitForEvents,
 } from "@/lib/core";
 
@@ -37,8 +38,8 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
       board, since: z.number().int().nonnegative().default(0),
       timeout: z.number().int().min(1).max(30).default(25),
     },
-  }, async ({ board, since, timeout }) => {
-    if (!hasEvents(board, since)) await waitForEvents(board, since, timeout * 1000);
+  }, async ({ board, since, timeout }, { signal }) => {
+    await waitForEvents(board, since, timeout * 1000, signal);
     const events = listEvents(board, since);
     return text({ events, cursor: events.length ? events[events.length - 1].id : since });
   });
@@ -89,6 +90,27 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
     if (!task || task.board !== board) return { ...text({ error: "task not found" }), isError: true };
     return text({ task: transitionTask(id, action, actor.actor) });
   });
+
+  const listChannel = z.string().min(1);
+  server.registerTool("list_lists", {
+    description: "List schema-backed lists in a space",
+    inputSchema: { board },
+  }, ({ board }) => text({ lists: listChannelsWithSchema(board) }));
+
+  server.registerTool("read_list", {
+    description: "Read a list's schema and items. Use before for older items or field/value for a schema choice.",
+    inputSchema: { board, channel: listChannel, before: itemId.optional(), field: z.string().optional(), value: z.string().optional() },
+  }, ({ board, channel, before, field, value }) => text(readItems(board, channel, { before, field, value })));
+
+  server.registerTool("add_list_item", {
+    description: "Add a validated list item. Reuse request_key to safely retry. The item ID is also its discussion thread ID.",
+    inputSchema: { board, channel: listChannel, ...addItemInput.shape },
+  }, ({ board, channel, ...input }) => text({ item: addItem(board, channel, actor.actor, input) }));
+
+  server.registerTool("update_list_item", {
+    description: "Patch fields on an existing list item. Unspecified fields are unchanged; null removes an optional field.",
+    inputSchema: { board, channel: listChannel, id: itemId, ...updateItemInput.shape },
+  }, ({ board, channel, id, ...input }) => text({ item: updateItem(board, channel, id, actor.actor, input) }));
 
   if (actor.kind === "admin") {
     server.registerTool("mint_agent", {
