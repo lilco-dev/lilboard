@@ -1,4 +1,4 @@
-import { createTask, listErrorResponse, listTasks } from "@/lib/core";
+import { createTask, listErrorResponse, listTasks, taskOptions } from "@/lib/core";
 import { requireActor } from "@/lib/auth";
 
 
@@ -17,7 +17,7 @@ export async function GET(req: Request, { params }: Params) {
   return Response.json({ board, tasks: listTasks({ board, state, channel }) });
 }
 
-// Create a task. JSON body: { title, channel, labels? }.
+// Create a task. JSON body: { title, channel, description?, assignee?, due?, priority?, labels? }.
 // A task is a thread root message with a state the board keeps.
 export async function POST(req: Request, { params }: Params) {
   const { board } = await params;
@@ -27,8 +27,11 @@ export async function POST(req: Request, { params }: Params) {
   if (typeof body?.title !== "string" || !body.title || typeof body.channel !== "string" || !body.channel) {
     return Response.json({ error: "body must be JSON with title and channel" }, { status: 400 });
   }
+  const options = taskOptions(body);
+  if (!options) return Response.json({ error: "invalid description, assignee, due, or priority" }, { status: 400 });
   try {
     const task = createTask({
+      ...options,
       board,
       channel: body.channel,
       title: body.title,

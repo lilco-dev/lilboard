@@ -1,24 +1,26 @@
-import { getTask, nextReady, transitionTask } from "@/lib/core";
+import { claimReady, getTask, transitionTask } from "@/lib/core";
 import { requireActor } from "@/lib/auth";
 
 
 type Params = { params: Promise<{ board: string; id: string }> };
 
 // POST /api/boards/:board/tasks/claim — claim the oldest ready task
-//   (optionally ?channel=), or POST /api/boards/:board/tasks/:id
+//   (optionally ?channel=), or a specific ready task with {id}.
+//   POST /api/boards/:board/tasks/:id
 //   with { action: claim|release|complete }
 export async function POST(req: Request, { params }: Params) {
   const { board, id } = await params;
   const actor = requireActor(req);
   if (actor instanceof Response) return actor;
   const url = new URL(req.url);
-  const body = id === "claim" ? {} : await req.json().catch(() => null);
+  const body = await req.json().catch(() => null);
 
   if (id === "claim") {
+    if (body?.id !== undefined && (!Number.isSafeInteger(body.id) || body.id <= 0)) {
+      return Response.json({ error: "id must be a positive integer" }, { status: 400 });
+    }
     const channel = url.searchParams.get("channel") ?? undefined;
-    const task = nextReady(board, channel);
-    if (!task) return Response.json({ task: null });
-    return Response.json({ task: transitionTask(task.id, "claim", actor.actor) });
+    return Response.json({ task: claimReady(board, actor.actor, channel, body?.id) });
   }
 
   const action = body?.action;
@@ -28,14 +30,14 @@ export async function POST(req: Request, { params }: Params) {
       { status: 400 }
     );
   }
-  const task = transitionTask(Number(id), action, actor.actor);
-  if (!task) return Response.json({ error: "task not found" }, { status: 404 });
-  return Response.json({ task });
+  const existing = getTask(Number(id));
+  if (!existing || existing.board !== board) return Response.json({ error: "task not found" }, { status: 404 });
+  return Response.json({ task: transitionTask(existing.id, action, actor.actor) });
 }
 
 export async function GET(_req: Request, { params }: Params) {
-  const { id } = await params;
+  const { board, id } = await params;
   const task = getTask(Number(id));
-  if (!task) return Response.json({ error: "task not found" }, { status: 404 });
+  if (!task || task.board !== board) return Response.json({ error: "task not found" }, { status: 404 });
   return Response.json({ task });
 }

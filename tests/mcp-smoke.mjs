@@ -91,6 +91,36 @@ const saved = await call(agent, "tools/call", {
   name: "read_messages", arguments: { board: filed.board, channel: "feedback", after: filed.id - 1, limit: 1 },
 });
 assert.equal(JSON.parse(saved.content[0].text).messages[0].id, filed.id);
+const taskBoard = `mcp-tasks-${randomUUID()}`;
+const firstTask = await call(agent, "tools/call", {
+  name: "create_task", arguments: { board: taskBoard, channel: "work", title: "First task" },
+});
+const firstId = JSON.parse(firstTask.content[0].text).task.id;
+const detailedTask = await call(agent, "tools/call", {
+  name: "create_task", arguments: {
+    board: taskBoard, channel: "work", title: "Detailed task", description: "Done when verified.",
+    assignee: "smoke-agent", due: "2030-01-31", priority: "high",
+  },
+});
+assert(!detailedTask.isError, JSON.stringify(detailedTask));
+const detail = JSON.parse(detailedTask.content[0].text).task;
+assert.deepEqual([detail.description, detail.assignee, detail.due, detail.priority], ["Done when verified.", "smoke-agent", "2030-01-31", "high"]);
+const listedTasks = await call(agent, "tools/call", {
+  name: "list_tasks", arguments: { board: taskBoard, state: "all" },
+});
+assert.equal(JSON.parse(listedTasks.content[0].text).tasks.find((task) => task.id === detail.id).priority, "high");
+const specificClaim = await call(agent, "tools/call", {
+  name: "claim_task", arguments: { board: taskBoard, id: detail.id },
+});
+assert.equal(JSON.parse(specificClaim.content[0].text).task.id, detail.id);
+const wrongBoard = await call(agent, "tools/call", {
+  name: "claim_task", arguments: { board: "other-board", id: firstId },
+});
+assert.equal(JSON.parse(wrongBoard.content[0].text).task, null);
+const oldestClaim = await call(agent, "tools/call", {
+  name: "claim_task", arguments: { board: taskBoard },
+});
+assert.equal(JSON.parse(oldestClaim.content[0].text).task.id, firstId);
 const result = await call(agent, "tools/call", {
   name: "post_message", arguments: { board: "mcp-smoke", channel: "tests", text: "hello" },
 });

@@ -9,8 +9,8 @@ import {
   listDefinition, readItems, registerListSchema, schemaId, updateItem, updateItemInput,
 } from "@/lib/lists";
 import {
-  createTask, getTask, listChannels, listEvents, listMessages,
-  listTasks, nextReady, postMessage, transitionTask, waitForEvents,
+  claimReady, createTask, getTask, listChannels, listEvents, listMessages,
+  listTasks, postMessage, transitionTask, waitForEvents,
 } from "@/lib/core";
 
 const text = (value: unknown) => ({
@@ -86,19 +86,22 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
   }, ({ board, state, channel }) => text({ tasks: listTasks({ board, state, channel }) }));
 
   server.registerTool("create_task", {
-    description: "Create a ready task",
-    inputSchema: { board, channel: z.string().min(1), title: z.string().min(1) },
-  }, ({ board, channel, title }) => text({ task: createTask({
-    board, channel, title, actor: actor.actor, profile: actor.profile,
+    description: "Create a ready task; due is an ISO calendar date (YYYY-MM-DD).",
+    inputSchema: {
+      board, channel: z.string().min(1), title: z.string().min(1),
+      description: z.string().trim().min(1).max(4000).optional(),
+      assignee: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
+      due: z.string().date().optional(),
+      priority: z.enum(["low", "normal", "high"]).optional(),
+    },
+  }, ({ board, channel, title, description, assignee, due, priority }) => text({ task: createTask({
+    board, channel, title, description, assignee, due, priority, actor: actor.actor, profile: actor.profile,
   }) }));
 
   server.registerTool("claim_task", {
-    description: "Claim the oldest ready task on a board",
-    inputSchema: { board, channel: z.string().min(1).optional() },
-  }, ({ board, channel }) => {
-    const task = nextReady(board, channel);
-    return text({ task: task ? transitionTask(task.id, "claim", actor.actor) : null });
-  });
+    description: "Claim a specific ready task by id, or the oldest ready task when id is omitted.",
+    inputSchema: { board, channel: z.string().min(1).optional(), id: z.number().int().positive().optional() },
+  }, ({ board, channel, id }) => text({ task: claimReady(board, actor.actor, channel, id) }));
 
   server.registerTool("transition_task", {
     description: "Claim, release, or complete a task",

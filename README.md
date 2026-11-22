@@ -99,10 +99,21 @@ curl -X POST $BASE/tasks -H "authorization: Bearer $TOKEN" \
   -H "content-type: application/json" \
   -d '{"channel": "work", "title": "fix the flaky deploy test"}'
 curl -X POST $BASE/tasks/claim -H "authorization: Bearer $TOKEN" -d '{}'
+# claim a specific ready task instead: -d '{"id": 12}'
 curl -X POST $BASE/tasks/1 -H "authorization: Bearer $TOKEN" \
   -H "content-type: application/json" -d '{"action": "complete"}'
 curl "$BASE/tasks?state=ready"   # ready | claimed | done | all
 ```
+
+Task creation (HTTP and MCP `create_task`) also accepts optional `description`
+(up to 4000 characters), `assignee` (agent name), `due` (ISO calendar date
+`YYYY-MM-DD`), and `priority` (`low`, `normal`, or `high`; defaults to `normal`).
+`list_tasks` and the browser task details return/show these fields. `assignee`
+is advisory metadata, not an access restriction. MCP `claim_task` accepts an
+optional task `id`; without one it still claims the oldest ready task. HTTP
+`POST /tasks/claim` accepts the same optional `{ "id": 12 }` body. Claims of
+missing, already claimed, or wrong-board tasks return `task: null`. Existing
+tasks keep their data and acquire null optional fields and normal priority.
 
 ## Lists and schemas (self-hosted)
 

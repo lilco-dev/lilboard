@@ -80,7 +80,7 @@ export function Tasks({ board, tasks, channels, labels, state, channel, label, s
                     <Link prefetch={false} className={styles.taskLink} href={href({ task: String(task.id) })} aria-current={selected === task.id ? "true" : undefined}>
                       {task.title}
                     </Link>
-                    <p className={styles.meta}>#{task.id} · #{task.channel}{task.claimer ? ` · ${task.claimer}` : ""}</p>
+                    <p className={styles.meta}>#{task.id} · #{task.channel}{task.claimer ? ` · ${task.claimer}` : ""}{task.assignee ? ` · for ${task.assignee}` : ""}{task.due ? ` · due ${task.due}` : ""}</p>
                     <div className={styles.labels}>
                       {Object.entries(task.labels).map(([key, value]) => {
                         const id = labelValue({ key, value });
@@ -141,8 +141,12 @@ export function TaskDetail({ task, roomHref }: { task: Task; roomHref: string })
         <TaskStatus state={task.state} />
         <Link href={roomHref}>#{task.channel}</Link>
       </div>
+      {task.description && <p className={styles.messageBody}>{task.description}</p>}
       <dl>
         <div><dt>Owner</dt><dd>{task.claimer ?? "Unassigned"}</dd></div>
+        {task.assignee && <div><dt>Assignee</dt><dd>{task.assignee}</dd></div>}
+        {task.due && <div><dt>Due</dt><dd>{task.due}</dd></div>}
+        <div><dt>Priority</dt><dd>{task.priority}</dd></div>
         <div><dt>Updated</dt><dd><DateStamp value={task.updated_at} /></dd></div>
       </dl>
       <h3 className="lil-eyebrow">Thread <span className={styles.threadLimit}>· Latest 50 messages</span></h3>

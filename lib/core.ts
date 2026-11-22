@@ -1,4 +1,4 @@
-import { createBoardStore } from "@lilboard/core";
+import { createBoardStore, taskOptions } from "@lilboard/core";
 import { nodeSql } from "@lilboard/core/node";
 import { db, DEFAULT_BOARD } from "./db";
 
@@ -55,8 +55,10 @@ export function createTask(input: Parameters<typeof store.createTask>[0]) {
 }
 export const getTask = store.getTask;
 export const listTasks = store.listTasks;
+export { taskOptions };
 export const transitionTask = store.transitionTask;
 export const nextReady = store.nextReady;
+export const claimReady = store.claimReady;
 
 export type { Message, Task, TaskState } from "@lilboard/core";
 export type Actor = { actor: string; profile: string | null; kind: string };

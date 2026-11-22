@@ -1,3 +1,5 @@
+import type { Sql } from "./sql";
+
 // Shared board logic for lilboard.
 //
 // One core, two runtimes: the Next.js self-host path drives it with
@@ -39,6 +41,10 @@ CREATE TABLE IF NOT EXISTS tasks (
   board TEXT NOT NULL,
   channel TEXT NOT NULL,
   title TEXT NOT NULL,
+  description TEXT,
+  assignee TEXT,
+  due TEXT,
+  priority TEXT NOT NULL DEFAULT 'normal',
   state TEXT NOT NULL DEFAULT 'ready',
   claimer TEXT,
   thread_id INTEGER NOT NULL,
@@ -57,3 +63,20 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_board ON events (board, id);
 `;
+
+// DO SQLite rejects PRAGMA, so probe columns instead of using table_info.
+export function migrateTaskColumns(sql: Sql) {
+  for (const [probe, migration] of [
+    ["SELECT description FROM tasks LIMIT 0", "ALTER TABLE tasks ADD COLUMN description TEXT"],
+    ["SELECT assignee FROM tasks LIMIT 0", "ALTER TABLE tasks ADD COLUMN assignee TEXT"],
+    ["SELECT due FROM tasks LIMIT 0", "ALTER TABLE tasks ADD COLUMN due TEXT"],
+    ["SELECT priority FROM tasks LIMIT 0", "ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'"],
+  ]) {
+    try {
+      sql.query(probe);
+    } catch (error) {
+      if (!(error instanceof Error) || !/no such column/i.test(error.message)) throw error;
+      sql.exec(migration);
+    }
+  }
+}

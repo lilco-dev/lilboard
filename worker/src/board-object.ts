@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { createBoardStore, SCHEMA } from "@lilboard/core";
+import { createBoardStore, migrateTaskColumns, SCHEMA, taskOptions } from "@lilboard/core";
 import type { Labels } from "@lilboard/core";
 import { doSql } from "./sql-do";
 
@@ -17,6 +17,7 @@ export class BoardObject extends DurableObject {
   private init() {
     if (this.initialized) return;
     this.ctx.storage.sql.exec(SCHEMA);
+    migrateTaskColumns(doSql(this.ctx.storage));
     this.initialized = true;
   }
 
@@ -59,7 +60,7 @@ export class BoardObject extends DurableObject {
       }
       if (segs[0] === "tasks" && segs.length === 2) {
         return segs[1] === "claim"
-          ? this.claim(board, actor, url.searchParams.get("channel"))
+          ? this.claim(request, board, actor, url.searchParams.get("channel"))
           : this.task(request, segs[1]);
       }
       return this.notFound();
@@ -150,10 +151,12 @@ export class BoardObject extends DurableObject {
     if (request.method === "POST") {
       return request.json().then((payload) => {
         const p = payload as { title?: string; channel?: string; labels?: Labels };
-        if (!p?.title || !p?.channel) {
+        if (typeof p?.title !== "string" || !p.title || typeof p?.channel !== "string" || !p.channel) {
           return Response.json({ error: "body must be JSON with title and channel" }, { status: 400 });
         }
-        const task = this.store.createTask({ board, channel: p.channel, title: p.title, actor, profile, labels: p.labels });
+        const options = taskOptions(p);
+        if (!options) return Response.json({ error: "invalid description, assignee, due, or priority" }, { status: 400 });
+        const task = this.store.createTask({ board, channel: p.channel, title: p.title, ...options, actor, profile, labels: p.labels });
         return Response.json({ task }, { status: 201 });
       });
     }
@@ -161,12 +164,14 @@ export class BoardObject extends DurableObject {
     return this.notFound();
   }
 
-  private claim(board: string, actor: string, channel?: string | null): Response {
-    // Atomic: the DO is single-threaded, so two racing agents always get
-    // different tasks.
-    const task = this.store.nextReady(board, channel ?? undefined);
-    if (!task) return Response.json({ task: null });
-    return Response.json({ task: this.store.transitionTask(task.id, "claim", actor) });
+  private async claim(request: Request, board: string, actor: string, channel?: string | null): Promise<Response> {
+    if (request.method !== "POST") return this.notFound();
+    const body = await request.json().catch(() => null) as { id?: unknown } | null;
+    if (body?.id !== undefined && (!Number.isSafeInteger(body.id) || Number(body.id) <= 0)) {
+      return Response.json({ error: "id must be a positive integer" }, { status: 400 });
+    }
+    // No await between choosing and claiming; the DO serializes requests.
+    return Response.json({ task: this.store.claimReady(board, actor, channel ?? undefined, body?.id as number | undefined) });
   }
 
   private task(request: Request, id: string): Response | Promise<Response> {

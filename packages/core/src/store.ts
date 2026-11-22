@@ -16,12 +16,32 @@ export type Message = {
 };
 
 export type TaskState = "ready" | "claimed" | "done";
+export type TaskPriority = "low" | "normal" | "high";
+export type TaskOptions = { description?: string; assignee?: string; due?: string; priority?: TaskPriority };
+
+export function taskOptions(value: unknown): TaskOptions | null {
+  if (!value || typeof value !== "object") return null;
+  const { description, assignee, due, priority } = value as Record<string, unknown>;
+  if (description !== undefined && (typeof description !== "string" || !description.trim() || description.length > 4000)) return null;
+  if (assignee !== undefined && (typeof assignee !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(assignee))) return null;
+  if (due !== undefined) {
+    if (typeof due !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(due)) return null;
+    const timestamp = Date.parse(`${due}T00:00:00Z`);
+    if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== due) return null;
+  }
+  if (priority !== undefined && priority !== "low" && priority !== "normal" && priority !== "high") return null;
+  return { description, assignee, due, priority } as TaskOptions;
+}
 
 export type Task = {
   id: number;
   board: string;
   channel: string;
   title: string;
+  description: string | null;
+  assignee: string | null;
+  due: string | null;
+  priority: TaskPriority;
   state: TaskState;
   claimer: string | null;
   thread_id: number;
@@ -192,7 +212,9 @@ export function createBoardStore(
     actor: string;
     profile?: string | null;
     labels?: Labels;
-  }): Task {
+  } & TaskOptions): Task {
+    const options = taskOptions(t);
+    if (!options) throw new Error("Invalid task options");
     const board = t.board ?? defaultBoard;
     const msg = postMessage({
       board,
@@ -203,11 +225,15 @@ export function createBoardStore(
       labels: { ...t.labels, state: "ready" },
     });
     sql.exec(
-      `INSERT INTO tasks (board, channel, title, state, thread_id, created_at, updated_at)
-       VALUES (?, ?, ?, 'ready', ?, ?, ?)`,
+      `INSERT INTO tasks (board, channel, title, description, assignee, due, priority, state, thread_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'ready', ?, ?, ?)`,
       board,
       t.channel,
       t.title,
+      options.description ?? null,
+      options.assignee ?? null,
+      options.due ?? null,
+      options.priority ?? "normal",
       msg.thread_id,
       now(),
       now()
@@ -275,6 +301,12 @@ export function createBoardStore(
     return (one(sql, qs, ...args) as Task | undefined) ?? null;
   }
 
+  function claimReady(board: string, actor: string, channel?: string, id?: number): Task | null {
+    const task = id === undefined ? nextReady(board, channel) : getTask(id);
+    if (!task || task.board !== board || task.state !== "ready" || (channel && task.channel !== channel)) return null;
+    return transitionTask(task.id, "claim", actor);
+  }
+
   return {
     defaultBoard,
     emit,
@@ -290,5 +322,6 @@ export function createBoardStore(
     listTasks,
     transitionTask,
     nextReady,
+    claimReady,
   };
 }
