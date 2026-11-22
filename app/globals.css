@@ -11,6 +11,13 @@ body {
   font: 400 0.9375rem/1.55 var(--lil-body);
 }
 
+h1, h2, h3 {
+  font-family: var(--lil-display);
+  font-style: normal;
+  font-weight: 500;
+  text-wrap: balance;
+}
+
 a {
   color: var(--lil-berry);
   text-underline-offset: 0.2em;

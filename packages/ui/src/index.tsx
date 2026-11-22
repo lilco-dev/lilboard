@@ -135,11 +135,8 @@ export function Inspector({
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="lil-empty">
-      <span className="lil-empty-mark" aria-hidden="true">✳</span>
-      <div>
-        <strong>{title}</strong>
-        {children && <p>{children}</p>}
-      </div>
+      <strong>{title}</strong>
+      {children && <p>{children}</p>}
     </div>
   );
 }
