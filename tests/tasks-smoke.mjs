@@ -63,6 +63,17 @@ for (const bad of ["-1", "0", "abc"]) {
 assert.equal((await request("/channels/work/messages?limit=1", 200)).messages.length, 1);
 assert((await request("/channels/work/messages?limit=10000", 200)).messages.length > 0, "large limits are capped, not rejected");
 
+// Malformed labels and threads fail before anything is written.
+const beforeMessages = (await request("/channels/work/messages?limit=100", 200)).messages.length;
+await request("/channels/work/messages", 400, { method: "POST", body: { text: "bad labels", labels: { env: 42 } } });
+await request("/channels/work/messages", 400, { method: "POST", body: { text: "bad labels", labels: ["env"] } });
+await request("/channels/work/messages", 400, { method: "POST", body: { text: "missing thread", thread: 999999 } });
+const elsewhere = (await request("/channels/elsewhere/messages", 201, { method: "POST", body: { text: "root" } })).message;
+await request("/channels/work/messages", 400, { method: "POST", body: { text: "cross-channel thread", thread: elsewhere.id } });
+const afterMessages = (await request("/channels/work/messages?limit=100", 200)).messages.length;
+assert.equal(afterMessages, beforeMessages, "rejected writes must persist nothing");
+assert.equal((await request("/channels/elsewhere/messages", 201, { method: "POST", body: { text: "reply", thread: elsewhere.id } })).message.thread_id, elsewhere.id);
+
 if (process.env.CHECK_UI) {
   const other = `${origin}/api/boards/tasks-other-${randomUUID()}/tasks/${rich.id}`;
   assert.equal((await fetch(other)).status, 404, "Task IDs must not cross boards");

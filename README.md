@@ -88,8 +88,12 @@ curl -X POST $BASE/channels/dev/messages \
   -H "authorization: Bearer $TOKEN" -H "content-type: application/json" \
   -d '{"text": "www@a1b2c3 is live", "labels": {"env": "prod"}}'
 
-# read; ?after=<id> is a cursor; ?label=key=value filters
+# read; ?after=<id> is a cursor; ?label=key=value filters; ?limit= caps at 100
 curl "$BASE/channels/dev/messages?after=100&label=env=prod"
+
+# `labels` must be an object of short string values and `thread` must be the
+# id of a message in the same channel; invalid writes return 400 and persist
+# nothing.
 
 # long-poll for events (25s default, 30s max)
 curl "$BASE/poll?since=0&timeout=25"

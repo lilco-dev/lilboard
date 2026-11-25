@@ -1,6 +1,17 @@
 import type { Sql, Row, Labels } from "./sql";
 import { one, lastId } from "./sql";
 
+// Client input failed validation before anything was written.
+export class BoardError extends Error {
+  readonly status = 400;
+}
+
+function validLabels(labels: unknown): labels is Labels {
+  return typeof labels === "object" && labels !== null && !Array.isArray(labels) &&
+    Object.entries(labels).every(([key, value]) =>
+      key.length > 0 && key.length <= 64 && typeof value === "string" && value.length <= 256);
+}
+
 export type Message = {
   id: number;
   board: string;
@@ -116,8 +127,18 @@ export function createBoardStore(
     labels?: Labels;
   }, options: { emitEvent?: boolean } = {}): Message {
     const board = m.board ?? defaultBoard;
-    ensureChannel(board, m.channel);
+    // Validate before any write so a rejected post leaves no partial state.
+    if (m.labels !== undefined && !validLabels(m.labels)) {
+      throw new BoardError("labels must be an object of short string values");
+    }
     const parent = m.thread ?? null;
+    if (parent !== null) {
+      const root = getMessage(parent);
+      if (!root || root.board !== board || root.channel !== m.channel || root.parent_id !== null) {
+        throw new BoardError("thread must be the id of a message in this channel");
+      }
+    }
+    ensureChannel(board, m.channel);
     sql.exec(
       `INSERT INTO messages (board, channel, thread_id, parent_id, actor, profile, body, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

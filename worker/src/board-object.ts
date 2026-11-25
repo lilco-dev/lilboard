@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { createBoardStore, migrateTaskColumns, SCHEMA, taskOptions } from "@lilboard/core";
+import { BoardError, createBoardStore, migrateTaskColumns, SCHEMA, taskOptions } from "@lilboard/core";
 import type { Labels } from "@lilboard/core";
 import { doSql } from "./sql-do";
 
@@ -52,19 +52,20 @@ export class BoardObject extends DurableObject {
 
     try {
       if (segs[0] === "channels" && segs.length === 3 && segs[2] === "messages") {
-        return this.messages(request, url, board, segs[1], actor, profile);
+        return await this.messages(request, url, board, segs[1], actor, profile);
       }
-      if (segs[0] === "poll" && segs.length === 1) return this.poll(url, board);
+      if (segs[0] === "poll" && segs.length === 1) return await this.poll(url, board);
       if (segs[0] === "tasks" && segs.length === 1) {
-        return this.tasks(request, url, board, actor, profile);
+        return await this.tasks(request, url, board, actor, profile);
       }
       if (segs[0] === "tasks" && segs.length === 2) {
         return segs[1] === "claim"
-          ? this.claim(request, board, actor, url.searchParams.get("channel"))
-          : this.task(request, board, segs[1], actor);
+          ? await this.claim(request, board, actor, url.searchParams.get("channel"))
+          : await this.task(request, board, segs[1], actor);
       }
       return this.notFound();
     } catch (err) {
+      if (err instanceof BoardError) return Response.json({ error: err.message }, { status: err.status });
       return Response.json({ error: String(err) }, { status: 500 });
     }
   }

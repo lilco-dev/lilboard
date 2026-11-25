@@ -1,4 +1,4 @@
-import { createBoardStore, taskOptions } from "@lilboard/core";
+import { BoardError, createBoardStore, taskOptions } from "@lilboard/core";
 import { nodeSql } from "@lilboard/core/node";
 import { db, DEFAULT_BOARD } from "./db";
 
@@ -21,6 +21,7 @@ export class ListError extends Error {
 }
 
 export function listErrorResponse(error: unknown) {
+  if (error instanceof BoardError) return Response.json({ error: error.message }, { status: error.status });
   if (!(error instanceof ListError)) throw error;
   return Response.json({ error: error.message }, { status: error.status });
 }
