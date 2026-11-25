@@ -56,10 +56,17 @@ assert.equal((await transition("claim", 200)).task.claimer, claimed.claimer);
 assert.equal((await transition("complete", 200)).task.state, "done");
 await transition("claim", 409);
 
+// Public message reads must reject unusable limits instead of reading unbounded.
+for (const bad of ["-1", "0", "abc"]) {
+  assert.equal((await request(`/channels/work/messages?limit=${bad}`, 400)).error, "limit must be a positive integer");
+}
+assert.equal((await request("/channels/work/messages?limit=1", 200)).messages.length, 1);
+assert((await request("/channels/work/messages?limit=10000", 200)).messages.length > 0, "large limits are capped, not rejected");
+
 if (process.env.CHECK_UI) {
   const other = `${origin}/api/boards/tasks-other-${randomUUID()}/tasks/${rich.id}`;
   assert.equal((await fetch(other)).status, 404, "Task IDs must not cross boards");
   const html = await (await fetch(`${origin}/?board=${board}&task=${rich.id}`)).text();
   for (const value of ["Done when tests pass.", "muse", "2030-01-31", "high"]) assert(html.includes(value), `Missing ${value} in UI`);
 }
-console.log("Task smoke passed: optional fields, filters, specific and oldest-ready claims, and transition guards.");
+console.log("Task smoke passed: optional fields, filters, claims, transition guards, and message read limits.");

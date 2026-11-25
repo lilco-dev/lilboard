@@ -85,7 +85,12 @@ export class BoardObject extends DurableObject {
   ): Response | Promise<Response> {
     if (request.method === "GET") {
       const after = Number(url.searchParams.get("after") ?? 0) || undefined;
-      const limit = Number(url.searchParams.get("limit") ?? 100) || 100;
+      const limitParam = url.searchParams.get("limit");
+      const limit = limitParam === null ? 100 : Number(limitParam);
+      if (!Number.isSafeInteger(limit) || limit <= 0) {
+        return Response.json({ error: "limit must be a positive integer" }, { status: 400 });
+      }
+      const capped = Math.min(limit, 100);
       const labelParam = url.searchParams.get("label");
       const label = labelParam
         ? (() => {
@@ -93,7 +98,7 @@ export class BoardObject extends DurableObject {
             return { key, value };
           })()
         : undefined;
-      return Response.json({ board, channel, messages: this.store.listMessages({ board, channel, after, limit, label }) });
+      return Response.json({ board, channel, messages: this.store.listMessages({ board, channel, after, limit: capped, label }) });
     }
 
     if (request.method === "POST") {

@@ -10,7 +10,11 @@ export async function GET(req: Request, { params }: Params) {
   const { board, channel } = await params;
   const url = new URL(req.url);
   const after = Number(url.searchParams.get("after") ?? 0) || undefined;
-  const limit = Number(url.searchParams.get("limit") ?? 100) || 100;
+  const limitParam = url.searchParams.get("limit");
+  const limit = limitParam === null ? 100 : Number(limitParam);
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    return Response.json({ error: "limit must be a positive integer" }, { status: 400 });
+  }
   const labelParam = url.searchParams.get("label");
   const label = labelParam
     ? (() => {
@@ -21,7 +25,7 @@ export async function GET(req: Request, { params }: Params) {
   return Response.json({
     board,
     channel,
-    messages: listMessages({ board, channel, after, limit, label }),
+    messages: listMessages({ board, channel, after, limit: Math.min(limit, 100), label }),
   });
 }
 
