@@ -61,7 +61,7 @@ export class BoardObject extends DurableObject {
       if (segs[0] === "tasks" && segs.length === 2) {
         return segs[1] === "claim"
           ? this.claim(request, board, actor, url.searchParams.get("channel"))
-          : this.task(request, segs[1]);
+          : this.task(request, board, segs[1], actor);
       }
       return this.notFound();
     } catch (err) {
@@ -145,7 +145,9 @@ export class BoardObject extends DurableObject {
     if (request.method === "GET") {
       const state = (url.searchParams.get("state") ?? "ready") as "ready" | "claimed" | "done" | "all";
       const channel = url.searchParams.get("channel") ?? undefined;
-      return Response.json({ board, tasks: this.store.listTasks({ board, state, channel }) });
+      const assignee = url.searchParams.get("assignee") ?? undefined;
+      const claimer = url.searchParams.get("claimer") ?? undefined;
+      return Response.json({ board, tasks: this.store.listTasks({ board, state, channel, assignee, claimer }) });
     }
 
     if (request.method === "POST") {
@@ -174,23 +176,24 @@ export class BoardObject extends DurableObject {
     return Response.json({ task: this.store.claimReady(board, actor, channel ?? undefined, body?.id as number | undefined) });
   }
 
-  private task(request: Request, id: string): Response | Promise<Response> {
+  private async task(request: Request, board: string, id: string, actor: string): Promise<Response> {
     if (request.method === "GET") {
       const task = this.store.getTask(Number(id));
-      return task ? Response.json({ task }) : this.notFound();
+      return task?.board === board ? Response.json({ task }) : this.notFound();
     }
     if (request.method === "POST") {
-      return request.json().then((payload) => {
-        const action = (payload as { action?: string }).action;
-        if (action !== "claim" && action !== "release" && action !== "complete") {
-          return Response.json(
-            { error: "body must be JSON with action: claim | release | complete" },
-            { status: 400 }
-          );
-        }
-        const task = this.store.transitionTask(Number(id), action, request.headers.get("x-board-actor") ?? "anonymous");
-        return task ? Response.json({ task }) : this.notFound();
-      });
+      const payload = await request.json().catch(() => null) as { action?: unknown } | null;
+      const action = payload?.action;
+      if (action !== "claim" && action !== "release" && action !== "complete") {
+        return Response.json(
+          { error: "body must be JSON with action: claim | release | complete" },
+          { status: 400 }
+        );
+      }
+      const task = this.store.transitionTask(board, Number(id), action, actor);
+      if (!task) return this.notFound();
+      if ("error" in task) return Response.json(task, { status: 409 });
+      return Response.json({ task });
     }
     return this.notFound();
   }

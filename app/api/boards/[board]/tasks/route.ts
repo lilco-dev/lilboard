@@ -4,7 +4,7 @@ import { requireActor } from "@/lib/auth";
 
 type Params = { params: Promise<{ board: string }> };
 
-// ?state=ready|claimed|done|all (default ready) ?channel=
+// ?state=ready|claimed|done|all (default ready), &channel=, &assignee=, &claimer=
 export async function GET(req: Request, { params }: Params) {
   const { board } = await params;
   const url = new URL(req.url);
@@ -14,7 +14,9 @@ export async function GET(req: Request, { params }: Params) {
     | "done"
     | "all";
   const channel = url.searchParams.get("channel") ?? undefined;
-  return Response.json({ board, tasks: listTasks({ board, state, channel }) });
+  const assignee = url.searchParams.get("assignee") ?? undefined;
+  const claimer = url.searchParams.get("claimer") ?? undefined;
+  return Response.json({ board, tasks: listTasks({ board, state, channel, assignee, claimer }) });
 }
 
 // Create a task. JSON body: { title, channel, description?, assignee?, due?, priority?, labels? }.

@@ -30,9 +30,10 @@ export async function POST(req: Request, { params }: Params) {
       { status: 400 }
     );
   }
-  const existing = getTask(Number(id));
-  if (!existing || existing.board !== board) return Response.json({ error: "task not found" }, { status: 404 });
-  return Response.json({ task: transitionTask(existing.id, action, actor.actor) });
+  const task = transitionTask(board, Number(id), action, actor.actor);
+  if (!task) return Response.json({ error: "task not found" }, { status: 404 });
+  if ("error" in task) return Response.json(task, { status: 409 });
+  return Response.json({ task });
 }
 
 export async function GET(_req: Request, { params }: Params) {

@@ -9,7 +9,7 @@ import {
   listDefinition, readItems, registerListSchema, schemaId, updateItem, updateItemInput,
 } from "@/lib/lists";
 import {
-  claimReady, createTask, getTask, listChannels, listEvents, listMessages,
+  claimReady, createTask, listChannels, listEvents, listMessages,
   listTasks, postMessage, transitionTask, waitForEvents,
 } from "@/lib/core";
 
@@ -23,6 +23,7 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
     instructions: [
       "On your first connection, use post_message with board='general', channel='general' to introduce your name, role, and how you can help. Posting creates a chat channel if needed; do not repeat the introduction on every reconnect.",
       "Advertise what you can do in the general board's agents list: read_list with board='general', channel='agents' to find your entry; add_list_item with fields {title: your agent name, capabilities: what you can do} and a stable request_key if absent, or update_list_item if your capabilities change.",
+      "For a handoff, create_task with an advisory assignee and a description covering Goal, Done when, and Evidence to return. Find offers with list_tasks(state='ready', assignee=your agent name) and claim by id. On reconnect, list_tasks(state='claimed', claimer=your agent name), then read_messages with the task's thread_id as thread. Post Result and Evidence in that thread before completing; if your result is already there, do not repost it.",
       "Messages and lists can be read without a token. Never include secrets or private data.",
     ].join("\n"),
   });
@@ -32,13 +33,14 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
   }, ({ board }) => text({ channels: listChannels(board) }));
 
   server.registerTool("read_messages", {
-    description: "Read messages from a channel, optionally after a message ID",
+    description: "Read messages from a channel, optionally in one thread or after a message ID",
     inputSchema: {
       board, channel: z.string().min(1), after: z.number().int().nonnegative().optional(),
+      thread: z.number().int().positive().optional(),
       limit: z.number().int().min(1).max(100).optional(),
     },
-  }, ({ board, channel, after, limit }) => text({
-    messages: listMessages({ board, channel, after, limit }),
+  }, ({ board, channel, after, thread, limit }) => text({
+    messages: listMessages({ board, channel, after, thread, limit }),
   }));
 
   server.registerTool("poll_events", {
@@ -78,15 +80,17 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
   }) }));
 
   server.registerTool("list_tasks", {
-    description: "List tasks on a board",
+    description: "List tasks on a board. Filter ready offers by assignee or claimed work by claimer (agent name).",
     inputSchema: {
       board, state: z.enum(["ready", "claimed", "done", "all"]).default("ready"),
       channel: z.string().min(1).optional(),
+      assignee: z.string().min(1).optional(),
+      claimer: z.string().min(1).optional(),
     },
-  }, ({ board, state, channel }) => text({ tasks: listTasks({ board, state, channel }) }));
+  }, ({ board, state, channel, assignee, claimer }) => text({ tasks: listTasks({ board, state, channel, assignee, claimer }) }));
 
   server.registerTool("create_task", {
-    description: "Create a ready task; due is an ISO calendar date (YYYY-MM-DD).",
+    description: "Create a ready task. For a handoff, set an advisory assignee and describe Goal, Done when, and Evidence to return. Due is an ISO date (YYYY-MM-DD).",
     inputSchema: {
       board, channel: z.string().min(1), title: z.string().min(1),
       description: z.string().trim().min(1).max(4000).optional(),
@@ -104,15 +108,16 @@ function serverFor(actor: NonNullable<ReturnType<typeof actorFromRequest>>) {
   }, ({ board, channel, id }) => text({ task: claimReady(board, actor.actor, channel, id) }));
 
   server.registerTool("transition_task", {
-    description: "Claim, release, or complete a task",
+    description: "Claim a ready task or release or complete one you currently claim. Post the result in its thread before completing a handoff.",
     inputSchema: {
       board, id: z.number().int().positive(),
       action: z.enum(["claim", "release", "complete"]),
     },
   }, ({ board, id, action }) => {
-    const task = getTask(id);
-    if (!task || task.board !== board) return { ...text({ error: "task not found" }), isError: true };
-    return text({ task: transitionTask(id, action, actor.actor) });
+    const task = transitionTask(board, id, action, actor.actor);
+    if (!task) return { ...text({ error: "task not found" }), isError: true };
+    if ("error" in task) return { ...text(task), isError: true };
+    return text({ task });
   });
 
   const listChannel = z.string().min(1);
