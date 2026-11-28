@@ -1,6 +1,17 @@
 import type { Sql, Row, Labels } from "./sql";
 import { one, lastId } from "./sql";
 
+// Client input failed validation before anything was written.
+export class BoardError extends Error {
+  readonly status = 400;
+}
+
+function validLabels(labels: unknown): labels is Labels {
+  return typeof labels === "object" && labels !== null && !Array.isArray(labels) &&
+    Object.entries(labels).every(([key, value]) =>
+      key.length > 0 && key.length <= 64 && typeof value === "string" && value.length <= 256);
+}
+
 export type Message = {
   id: number;
   board: string;
@@ -116,8 +127,18 @@ export function createBoardStore(
     labels?: Labels;
   }, options: { emitEvent?: boolean } = {}): Message {
     const board = m.board ?? defaultBoard;
-    ensureChannel(board, m.channel);
+    // Validate before any write so a rejected post leaves no partial state.
+    if (m.labels !== undefined && !validLabels(m.labels)) {
+      throw new BoardError("labels must be an object of short string values");
+    }
     const parent = m.thread ?? null;
+    if (parent !== null) {
+      const root = getMessage(parent);
+      if (!root || root.board !== board || root.channel !== m.channel || root.parent_id !== null) {
+        throw new BoardError("thread must be the id of a message in this channel");
+      }
+    }
+    ensureChannel(board, m.channel);
     sql.exec(
       `INSERT INTO messages (board, channel, thread_id, parent_id, actor, profile, body, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -251,6 +272,8 @@ export function createBoardStore(
     board?: string;
     state?: TaskState | "all";
     channel?: string;
+    assignee?: string;
+    claimer?: string;
     limit?: number;
   }): Task[] {
     const board = o.board ?? defaultBoard;
@@ -264,25 +287,32 @@ export function createBoardStore(
       qs += " AND channel = ?";
       args.push(o.channel);
     }
+    if (o.assignee !== undefined) {
+      qs += " AND assignee = ?";
+      args.push(o.assignee);
+    }
+    if (o.claimer !== undefined) {
+      qs += " AND claimer = ?";
+      args.push(o.claimer);
+    }
     qs += " ORDER BY id LIMIT ?";
     args.push(o.limit ?? 100);
     return sql.query(qs, ...args) as Task[];
   }
 
-  function transitionTask(id: number, action: "claim" | "release" | "complete", actor: string): Task | null {
+  function transitionTask(board: string, id: number, action: "claim" | "release" | "complete", actor: string): Task | { error: string } | null {
     const task = getTask(id);
-    if (!task) return null;
-    if (action === "complete") {
-      sql.exec("UPDATE tasks SET state = 'done', updated_at = ? WHERE id = ?", now(), id);
-    } else {
-      const next = action === "claim" ? "claimed" : "ready";
-      sql.exec("UPDATE tasks SET state = ?, claimer = ?, updated_at = ? WHERE id = ?", next, action === "claim" ? actor : null, now(), id);
+    if (!task || task.board !== board) return null;
+    if (action === "claim" && task.state !== "ready") {
+      return { error: "Only ready tasks can be claimed" };
     }
-    sql.exec(
-      "INSERT OR REPLACE INTO labels (message_id, key, value) VALUES (?, 'state', ?)",
-      task.thread_id,
-      action === "complete" ? "done" : action === "claim" ? "claimed" : "ready"
-    );
+    if (action !== "claim" && (task.state !== "claimed" || task.claimer !== actor)) {
+      return { error: "Only the current claimer can release or complete a claimed task" };
+    }
+    const state = { claim: "claimed", release: "ready", complete: "done" }[action];
+    const claimer = action === "release" ? null : actor;
+    sql.exec("UPDATE tasks SET state = ?, claimer = ?, updated_at = ? WHERE id = ?", state, claimer, now(), id);
+    sql.exec("INSERT OR REPLACE INTO labels (message_id, key, value) VALUES (?, 'state', ?)", task.thread_id, state);
     emit(task.board, "task", id, task.channel);
     return getTask(id);
   }
@@ -303,8 +333,9 @@ export function createBoardStore(
 
   function claimReady(board: string, actor: string, channel?: string, id?: number): Task | null {
     const task = id === undefined ? nextReady(board, channel) : getTask(id);
-    if (!task || task.board !== board || task.state !== "ready" || (channel && task.channel !== channel)) return null;
-    return transitionTask(task.id, "claim", actor);
+    if (!task || (channel && task.channel !== channel)) return null;
+    const result = transitionTask(board, task.id, "claim", actor);
+    return result && !("error" in result) ? result : null;
   }
 
   return {

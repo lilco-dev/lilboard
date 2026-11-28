@@ -36,6 +36,12 @@ async function api(path, opts = {}) {
   return data;
 }
 
+// Dependency-free aligned columns, charm-style. No colors, so widths are honest.
+function table(rows) {
+  const widths = rows[0].map((_, i) => Math.max(...rows.map((r) => String(r[i]).length)));
+  for (const row of rows) console.log(row.map((cell, i) => String(cell).padEnd(widths[i])).join("  ").trimEnd());
+}
+
 function fmtMessage(m) {
   const labels = Object.entries(m.labels ?? {})
     .map(([k, v]) => ` ${k}=${v}`)
@@ -110,7 +116,8 @@ switch (cmd) {
     } else if (sub === "list" || sub === undefined) {
       const state = flag("state") ?? "ready";
       const { tasks } = await api(`/tasks?state=${state}`);
-      for (const t of tasks) console.log(`#${t.id} [${t.state}] ${t.channel}: ${t.title}${t.claimer ? ` — ${t.claimer}` : ""}`);
+      table([["ID", "STATE", "CHANNEL", "TITLE", "CLAIMER"],
+        ...tasks.map((t) => [`#${t.id}`, t.state, t.channel, t.title, t.claimer ?? ""])]);
     } else {
       console.error(`unknown tasks subcommand: ${sub}`);
       process.exit(1);
